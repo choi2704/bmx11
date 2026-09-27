@@ -51,8 +51,90 @@ function commitExpense(d,cat,amount,memo,image){db.trainings[d].expenses.push({c
 function comment(d){let i=document.getElementById('comment');if(!i.value.trim())return;let author=localStorage.getItem('bmx11_name')||prompt('작성자 이름')||'회원';localStorage.setItem('bmx11_name',author);(db.comments[d]||(db.comments[d]=[])).push({author,text:i.value.trim()});save();render()}
 function members(){let list=db.members.map(x=>`<div class="card row between"><div><b>${x.name}</b><div class=muted>${x.role==='coach'?'코치':'아이'}</div></div><button class="pill danger" onclick="delMember('${x.id}')">삭제</button></div>`).join('');el().innerHTML=`<div class="row between"><h2>명단 관리</h2><button class=btn onclick=addMember()>+ 추가</button></div>${list}`}
 function addMember(){let name=prompt('이름');if(!name)return;let role=confirm('코치인가요? 확인=코치 / 취소=아이')?'coach':'child';db.members.push({id:'m'+Date.now(),name,role});save();render()}function delMember(id){if(confirm('현재 명단에서 삭제할까요?')){db.members=db.members.filter(x=>x.id!==id);save();render()}}
-function finance(){let inc=db.ledger.filter(x=>x.type==='in').reduce((a,b)=>a+Number(b.amount),0),out=db.ledger.filter(x=>x.type==='out').reduce((a,b)=>a+Number(b.amount),0);let rows=[...db.ledger].reverse().map(x=>`<div class="ledger row between"><div><b>${x.date} · ${x.category}</b><div class=muted>${x.memo||''}</div></div><b class="money ${x.type}">${x.type==='in'?'+':'-'}${money(x.amount)}</b></div>`).join('');el().innerHTML=`<h2>납부 · 회계</h2><div class="card summary"><div><span class=muted>총 입금</span><br><b class="money in">${money(inc)}</b></div><div><span class=muted>총 지출</span><br><b class="money out">${money(out)}</b></div><div><span class=muted>잔액</span><br><b>${money(inc-out)}</b></div></div><div class="row" style="margin-bottom:14px"><button class=btn style="flex:1" onclick="addLedger('in')">+ 입금 등록</button><button class="btn danger" style="flex:1" onclick="addLedger('out')">- 지출 등록</button></div><div class=card><div class=section-title>전체 입출금 장부</div>${rows||'<div class=empty>아직 기록이 없습니다.</div>'}</div>`}
-function addLedger(type){let date=prompt('날짜',new Date().toISOString().slice(0,10));if(!date)return;let category=prompt(type==='in'?'입금 항목 (코칭비 등)':'지출 항목')||'기타';let amount=Number(prompt('금액')||0);let memo=prompt('메모')||'';db.ledger.push({date,type,category,amount,memo});save();render()}
+function finance(){let inc=db.ledger.filter(x=>x.type==='in').reduce((a,b)=>a+Number(b.amount),0),out=db.ledger.filter(x=>x.type==='out').reduce((a,b)=>a+Number(b.amount),0);let rows=db.ledger.map((x,i)=>({x,i})).reverse().map(({x,i})=>`<div class="ledger"><div class="row between"><div><b>${x.date} · ${x.category}</b><div class=muted>${x.memberName?('입금자: '+x.memberName+(x.memo?' · ':'')) : ''}${x.memo||''}</div></div><b class="money ${x.type}">${x.type==='in'?'+':'-'}${money(x.amount)}</b></div><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="pill ghost" onclick="editLedger(${i})">수정</button><button class="pill danger" onclick="deleteLedger(${i})">삭제</button></div></div>`).join('');el().innerHTML=`<h2>납부 · 회계</h2><div class="card summary"><div><span class=muted>총 입금</span><br><b class="money in">${money(inc)}</b></div><div><span class=muted>총 지출</span><br><b class="money out">${money(out)}</b></div><div><span class=muted>잔액</span><br><b>${money(inc-out)}</b></div></div><div class="row" style="margin-bottom:14px"><button class=btn style="flex:1" onclick="addLedger('in')">+ 입금 등록</button><button class="btn danger" style="flex:1" onclick="addLedger('out')">- 지출 등록</button></div><div class=card><div class=section-title>전체 입출금 장부</div>${rows||'<div class=empty>아직 기록이 없습니다.</div>'}</div>`}
+function addLedger(type){
+  if(type!=='in'){
+    let date=prompt('날짜',new Date().toISOString().slice(0,10));if(!date)return;
+    let category=prompt('지출 항목')||'기타';
+    let amount=Number(prompt('금액')||0);
+    let memo=prompt('메모')||'';
+    db.ledger.push({date,type,category,amount,memo});save();render();return;
+  }
+  showDepositForm();
+}
+function showDepositForm(){
+  const members=db.members.filter(x=>x.role==='child');
+  const wrap=document.createElement('div');
+  wrap.id='depositModal';
+  wrap.style.cssText='position:fixed;inset:0;background:#0008;z-index:99;display:flex;align-items:flex-end;justify-content:center';
+  wrap.innerHTML=`<div style="background:white;width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px">
+    <div class="row between"><div class=section-title>💰 입금 등록</div><button class="pill ghost" id=closeDeposit>닫기</button></div>
+    <div class=form>
+      <label>입금 날짜<input id=depDate type=date value="${new Date().toLocaleDateString('sv-SE')}"></label>
+      <div><b>입금한 회원</b><div class=muted>명단의 아이가 자동으로 표시됩니다.</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:8px">
+        ${members.map(x=>`<label style="border:1px solid #dfe4ec;border-radius:10px;padding:10px"><input style="width:auto" type=radio name=depMember value="${x.id}" data-name="${x.name}"> ${x.name}</label>`).join('')}
+        </div>
+      </div>
+      <div><b>입금 항목</b><div class=muted>여러 항목을 동시에 체크할 수 있습니다.</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:8px">
+          ${['코칭비','회비','간식비','숙박비'].map(x=>`<label style="border:1px solid #dfe4ec;border-radius:10px;padding:10px"><input style="width:auto" type=checkbox class=depCat value="${x}"> ${x}</label>`).join('')}
+          <label style="border:1px solid #dfe4ec;border-radius:10px;padding:10px"><input style="width:auto" type=checkbox class=depCat value="기타"> 기타</label>
+        </div>
+        <input id=depOther placeholder="기타 항목 직접 입력" style="margin-top:8px">
+      </div>
+      <div><b>금액 빠른 입력</b><div class=muted>중복 체크하면 자동으로 합산됩니다.</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:8px">
+          ${[10000,30000,50000,70000,90000].map(n=>`<label style="border:1px solid #dfe4ec;border-radius:10px;padding:10px;text-align:center"><input style="width:auto" type=checkbox class=depAmt value="${n}"> ${n/10000}만원</label>`).join('')}
+        </div>
+      </div>
+      <label>추가 금액<input id=depCustom type=number inputmode=numeric placeholder="필요하면 직접 입력"></label>
+      <div class=card style="margin:0"><div class="row between"><b>입금 합계</b><b class="big" id=depTotal>0원</b></div></div>
+      <label>메모<input id=depMemo placeholder="선택사항"></label>
+      <button class=btn id=saveDeposit style="width:100%">입금 저장</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const total=()=>{let v=[...wrap.querySelectorAll('.depAmt:checked')].reduce((a,x)=>a+Number(x.value),0)+Number(wrap.querySelector('#depCustom').value||0);wrap.querySelector('#depTotal').textContent=money(v);return v};
+  wrap.querySelectorAll('.depAmt').forEach(x=>x.onchange=total);wrap.querySelector('#depCustom').oninput=total;
+  wrap.querySelector('#closeDeposit').onclick=()=>wrap.remove();
+  wrap.querySelector('#saveDeposit').onclick=()=>{
+    const mem=wrap.querySelector('input[name=depMember]:checked');if(!mem)return alert('입금한 회원을 선택해주세요.');
+    let cats=[...wrap.querySelectorAll('.depCat:checked')].map(x=>x.value);
+    if(cats.includes('기타')){const o=wrap.querySelector('#depOther').value.trim();cats=cats.filter(x=>x!=='기타');if(o)cats.push(o);else cats.push('기타')}
+    if(!cats.length)return alert('입금 항목을 하나 이상 체크해주세요.');
+    const amount=total();if(!amount)return alert('금액을 선택하거나 입력해주세요.');
+    const date=wrap.querySelector('#depDate').value, memo=wrap.querySelector('#depMemo').value.trim();
+    db.ledger.push({date,type:'in',category:cats.join(' + '),amount,memo,memberId:mem.value,memberName:mem.dataset.name});
+    save();wrap.remove();render();
+  };
+}
+
+function editLedger(i){
+  const x=db.ledger[i]; if(!x)return;
+  const date=prompt('날짜',x.date); if(date===null)return;
+  const category=prompt('항목',x.category); if(category===null)return;
+  const amountText=prompt('금액 (숫자만 입력)',String(x.amount)); if(amountText===null)return;
+  const amount=Number(amountText.replace(/[^0-9.-]/g,'')); if(!Number.isFinite(amount)||amount<0)return alert('금액을 확인해주세요.');
+  let memberName=x.memberName||'', memberId=x.memberId||'';
+  if(x.type==='in'){
+    const names=db.members.filter(m=>m.role==='child').map(m=>m.name).join(', ');
+    const payer=prompt('입금자 이름\\n현재 회원: '+names,memberName);
+    if(payer===null)return;
+    memberName=payer.trim();
+    const found=db.members.find(m=>m.name===memberName);
+    memberId=found?found.id:memberId;
+  }
+  const memo=prompt('메모',x.memo||''); if(memo===null)return;
+  db.ledger[i]={...x,date,category,amount,memo,memberName,memberId};
+  save();render();
+}
+function deleteLedger(i){
+  const x=db.ledger[i]; if(!x)return;
+  if(!confirm(`${x.date} ${x.category} ${money(x.amount)} 기록을 삭제할까요?`))return;
+  db.ledger.splice(i,1);save();render();
+}
+
 function settings(){el().innerHTML=`<h2>설정</h2><div class=card><div class=section-title>현재 저장 방식</div><p>이 테스트 버전은 이 기기의 브라우저에 저장됩니다.</p><p class=muted>다음 단계에서 Firebase를 연결하면 모든 회원의 휴대폰에서 일정·출석·회계·영수증을 실시간 공유할 수 있습니다.</p></div><div class=card><button class="btn danger" onclick="if(confirm('테스트 데이터를 모두 초기화할까요?')){localStorage.removeItem(K);location.reload()}">테스트 데이터 초기화</button></div>`}
 render();
 </script></body></html>
