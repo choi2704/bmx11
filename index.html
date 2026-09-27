@@ -25,11 +25,18 @@ const K='bmx11_v2';
 const seed={members:[{id:'c1',name:'김코치',role:'coach'},{id:'c2',name:'이코치',role:'coach'},{id:'k1',name:'민준',role:'child'},{id:'k2',name:'서준',role:'child'},{id:'k3',name:'지우',role:'child'}],trainings:{},ledger:[],payments:{},comments:{}};
 let db=JSON.parse(localStorage.getItem(K)||'null')||seed, view='calendar', selected=null;
 const save=()=>localStorage.setItem(K,JSON.stringify(db)); const el=()=>document.getElementById('main');
-function money(n){return Number(n||0).toLocaleString('ko-KR')+'원'} function todayMonth(){return new Date().toISOString().slice(0,7)} let month=todayMonth();
+function money(n){return Number(n||0).toLocaleString('ko-KR')+'원'} function todayMonth(){let d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`} let month=todayMonth();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{view=b.dataset.view;selected=null;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));render()});
 function render(){if(view==='calendar') calendar(); if(view==='members') members(); if(view==='finance') finance(); if(view==='settings') settings()}
 function calendar(){if(selected)return detail(selected); let [y,m]=month.split('-').map(Number), first=new Date(y,m-1,1).getDay(), days=new Date(y,m,0).getDate();let cells='';for(let i=0;i<first;i++)cells+='<div></div>';for(let d=1;d<=days;d++){let ds=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`,t=db.trainings[ds],wk=[0,6].includes(new Date(y,m-1,d).getDay());cells+=`<button class="day ${wk?'weekend':''} ${t?'has':''}" onclick="selected='${ds}';render()"><div class=date>${d}</div>${t?`<div class=info>${t.time||''}<br>${t.place||''}</div>`:''}</button>`} el().innerHTML=`<div class=month><button class="pill ghost" onclick="shift(-1)">‹</button><div class=big>${y}년 ${m}월</div><button class="pill ghost" onclick="shift(1)">›</button></div><div class=calendar>${['일','월','화','수','목','금','토'].map(x=>`<div class=dow>${x}</div>`).join('')}${cells}</div><button class="btn" style="width:100%;margin-top:14px" onclick="newTraining()">+ 훈련 일정 추가</button>`}
-function shift(n){let [y,m]=month.split('-').map(Number);let d=new Date(y,m-1+n,1);month=d.toISOString().slice(0,7);render()}
+function shift(n){
+  const [y,m] = month.split('-').map(Number);
+  const totalMonths = y * 12 + (m - 1) + n;
+  const newYear = Math.floor(totalMonths / 12);
+  const newMonth = ((totalMonths % 12) + 12) % 12 + 1;
+  month = `${newYear}-${String(newMonth).padStart(2,'0')}`;
+  render();
+}
 function newTraining(){let d=prompt('훈련 날짜를 입력하세요. 예: 2026-10-10');if(d){db.trainings[d]=db.trainings[d]||{time:'10:00 ~ 13:00',place:'',notice:'',important:'',attendance:{},expenses:[]};save();selected=d;render()}}
 function detail(d){let t=db.trainings[d]||(db.trainings[d]={time:'',place:'',notice:'',important:'',attendance:{},expenses:[]});let kids=db.members.filter(x=>x.role==='child');let possible=kids.filter(x=>t.attendance[x.id]==='g').length;let rows=db.members.map(x=>`<div class=status><div><b>${x.name}</b><div class=muted>${x.role==='coach'?'코치':'아이'}</div></div>${['g','y','r'].map((s,i)=>`<button class="${s} ${t.attendance[x.id]===s?'on':''}" onclick="att('${d}','${x.id}','${s}')">${['가능','조정','불가'][i]}</button>`).join('')}</div>`).join('');let ex=(t.expenses||[]).map((x,i)=>`<div class="ledger row between"><div><b>${x.category}</b><div class=muted>${x.memo||''}</div>${x.image?`<img class=receipt src="${x.image}">`:''}</div><b class="money out">-${money(x.amount)}</b></div>`).join('');let comments=(db.comments[d]||[]).map(x=>`<div class=comment><b>${x.author}</b><div>${x.text}</div></div>`).join('');
 el().innerHTML=`<button class="pill ghost" onclick="selected=null;render()">← 달력</button><h2>${d} 훈련</h2>
