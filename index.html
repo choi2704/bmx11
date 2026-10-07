@@ -9,7 +9,7 @@
 .app{max-width:680px;margin:auto;min-height:100vh;background:var(--bg);padding-bottom:86px}.top{position:sticky;top:0;z-index:4;background:#fff;padding:18px 18px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.brand{font-weight:900;font-size:22px;color:var(--blue)}button{font:inherit;border:0;cursor:pointer}.pill,.btn{border-radius:12px;padding:11px 14px;font-weight:750}.btn{background:var(--blue);color:#fff}.ghost{background:#eef4ff;color:var(--blue)}.danger{background:#fff0f0;color:var(--red)}
 main{padding:16px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 3px 14px #1b37610a}.row{display:flex;gap:10px;align-items:center}.between{justify-content:space-between}.muted{color:var(--muted);font-size:13px}.big{font-size:25px;font-weight:900}.tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(680px,100%);display:grid;grid-template-columns:repeat(4,1fr);background:#fff;border-top:1px solid var(--line);padding:8px 6px calc(8px + env(safe-area-inset-bottom));z-index:5}.tab{background:none;padding:8px 2px;color:#687386;font-size:12px}.tab b{display:block;font-size:20px;margin-bottom:3px}.tab.on{color:var(--blue)}
 .month{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.dow{text-align:center;font-size:12px;color:#7a8496;padding:5px}.day{min-height:78px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:7px;font-size:12px;text-align:left}.day.weekend{background:#fbfcff}.day.has{border:2px solid #b9d3ff}.day .date{font-weight:800}.day .info{font-size:10px;margin-top:8px;color:var(--blue);line-height:1.35}.section-title{font-size:18px;font-weight:900;margin:4px 0 12px}
-input,textarea,select{width:100%;border:1px solid #dfe4ec;border-radius:11px;padding:11px;background:#fff;font:inherit}textarea{min-height:78px;resize:vertical}.form{display:grid;gap:9px}.status{display:grid;grid-template-columns:1fr repeat(3,62px);gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.status button{padding:8px 3px;border-radius:9px;background:#f3f5f8;font-size:12px}.status .g.on{background:#dff7e9;color:#087c44}.status .y.on{background:#fff0c9;color:#9a6500}.status .r.on{background:#ffe1e1;color:#b62424}.receipt{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}.ledger{padding:10px 0;border-bottom:1px solid var(--line)}.money.in{color:var(--green)}.money.out{color:var(--red)}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.summary>div{border-radius:13px;padding:12px 8px;text-align:center;background:#f6f8fc}.hidden{display:none!important}.empty{text-align:center;color:var(--muted);padding:28px 5px}.comment{padding:10px 0;border-bottom:1px solid var(--line)}.badge{font-size:12px;padding:5px 8px;border-radius:99px;background:#edf3ff;color:var(--blue)}
+input,textarea,select{width:100%;border:1px solid #dfe4ec;border-radius:11px;padding:11px;background:#fff;font:inherit}textarea{min-height:78px;resize:vertical}.form{display:grid;gap:9px}.status{display:grid;grid-template-columns:1fr repeat(3,62px);gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.status button{padding:8px 3px;border-radius:9px;background:#f3f5f8;font-size:12px}.status .g.on{background:#dff7e9;color:#087c44}.status .y.on{background:#fff0c9;color:#9a6500}.status .r.on{background:#ffe1e1;color:#b62424}.receipt{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}.ledger{padding:10px 0;border-bottom:1px solid var(--line)}.money.in{color:var(--green)}.money.out{color:var(--red)}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.summary>div{border-radius:13px;padding:12px 8px;text-align:center;background:#f6f8fc}.hidden{display:none!important}.empty{text-align:center;color:var(--muted);padding:28px 5px}.comment{padding:10px 0;border-bottom:1px solid var(--line)}.comment-actions{display:flex;gap:6px;margin-top:7px}.comment-actions button{padding:5px 9px;border-radius:8px;font-size:12px}.notice-photo{width:100%;max-height:260px;object-fit:cover;border-radius:12px;border:1px solid var(--line);margin-top:8px}.expense-total{font-size:22px;font-weight:900;color:var(--red)}.check-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.check-item{border:1px solid #dfe4ec;border-radius:10px;padding:10px;background:#fff}.check-item input{width:auto;margin-right:6px}.badge{font-size:12px;padding:5px 8px;border-radius:99px;background:#edf3ff;color:var(--blue)}
 @media(max-width:440px){main{padding:12px}.day{min-height:68px;padding:5px}.day .info{font-size:9px}.status{grid-template-columns:1fr repeat(3,55px)}}
 </style>
 </head>
@@ -23,7 +23,10 @@ input,textarea,select{width:100%;border:1px solid #dfe4ec;border-radius:11px;pad
 <script>
 const K='bmx11_final_v1';
 const seed={members:[],trainings:{},ledger:[],payments:{},comments:{}};
-let db=JSON.parse(localStorage.getItem(K)||'null')||seed, view='calendar', selected=null;
+let db=JSON.parse(localStorage.getItem(K)||'null')||JSON.parse(JSON.stringify(seed)), view='calendar', selected=null;
+// 기존 브라우저에 입력된 데이터는 절대 초기화하지 않고, 새 필드만 보완합니다.
+db.members=db.members||[];db.trainings=db.trainings||{};db.ledger=db.ledger||[];db.payments=db.payments||{};db.comments=db.comments||{};
+Object.values(db.trainings).forEach(t=>{t.attendance=t.attendance||{};t.expenses=t.expenses||[];t.noticeImages=t.noticeImages||[]});
 const save=()=>localStorage.setItem(K,JSON.stringify(db)); const el=()=>document.getElementById('main');
 function money(n){return Number(n||0).toLocaleString('ko-KR')+'원'} function todayMonth(){let d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`} let month=todayMonth();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{view=b.dataset.view;selected=null;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));render()});
@@ -37,29 +40,63 @@ function shift(n){
   month = `${newYear}-${String(newMonth).padStart(2,'0')}`;
   render();
 }
-function newTraining(){let d=prompt('훈련 날짜를 입력하세요. 예: 2026-10-10');if(d){db.trainings[d]=db.trainings[d]||{time:'10:00 ~ 13:00',place:'',notice:'',important:'',attendance:{},expenses:[]};save();selected=d;render()}}
-function detail(d){let t=db.trainings[d]||(db.trainings[d]={time:'',place:'',notice:'',important:'',attendance:{},expenses:[]});let kids=db.members.filter(x=>x.role==='child');let possible=kids.filter(x=>t.attendance[x.id]==='g').length;let rows=db.members.map(x=>`<div class=status><div><b>${x.name}</b><div class=muted>${x.role==='coach'?'코치':'아이'}</div></div>${['g','y','r'].map((s,i)=>`<button class="${s} ${t.attendance[x.id]===s?'on':''}" onclick="att('${d}','${x.id}','${s}')">${['가능','조정','불가'][i]}</button>`).join('')}</div>`).join('');let ex=(t.expenses||[]).map((x,i)=>`<div class="ledger row between"><div><b>${x.category}</b><div class=muted>${x.memo||''}</div>${x.image?`<img class=receipt src="${x.image}" onclick="window.open(this.src)" title="영수증 크게 보기">`:''}</div><div style="text-align:right"><b class="money out">-${money(x.amount)}</b><br><button class="pill danger" style="margin-top:7px;padding:6px 9px" onclick="deleteExpense('${d}',${i})">삭제</button></div></div>`).join('');let comments=(db.comments[d]||[]).map(x=>`<div class=comment><b>${x.author}</b><div>${x.text}</div></div>`).join('');
-el().innerHTML=`<button class="pill ghost" onclick="selected=null;render()">← 달력</button><h2>${d} 훈련</h2>
+function newTraining(){let d=prompt('훈련 날짜를 입력하세요. 예: 2026-10-10');if(d){db.trainings[d]=db.trainings[d]||{time:'10:00 ~ 13:00',place:'',notice:'',important:'',attendance:{},expenses:[],noticeImages:[]};save();selected=d;render()}}
+function detail(d){
+  let t=db.trainings[d]||(db.trainings[d]={time:'',place:'',notice:'',important:'',attendance:{},expenses:[],noticeImages:[]});
+  t.attendance=t.attendance||{};t.expenses=t.expenses||[];t.noticeImages=t.noticeImages||[];
+  let kids=db.members.filter(x=>x.role==='child');
+  let possible=kids.filter(x=>t.attendance[x.id]==='g').length;
+  let rows=db.members.map(x=>`<div class=status><div><b>${x.name}</b><div class=muted>${x.role==='coach'?'코치':'아이'}</div></div>${['g','y','r'].map((s,i)=>`<button class="${s} ${t.attendance[x.id]===s?'on':''}" onclick="att('${d}','${x.id}','${s}')">${['가능','조정','불가'][i]}</button>`).join('')}</div>`).join('');
+  let totalExpense=t.expenses.reduce((a,x)=>a+Number(x.amount||0),0);
+  let ex=t.expenses.map((x,i)=>`<div class="ledger row between"><div style="min-width:0"><b>${x.category}</b><div class=muted>${x.memo||''}</div>${x.image?`<img class=receipt src="${x.image}" onclick="window.open(this.src)" title="영수증 크게 보기">`:''}</div><div style="text-align:right;white-space:nowrap"><b class="money out">-${money(x.amount)}</b><br><button class="pill ghost" style="margin-top:7px;padding:6px 9px" onclick="editExpense('${d}',${i})">수정</button> <button class="pill danger" style="margin-top:7px;padding:6px 9px" onclick="deleteExpense('${d}',${i})">삭제</button></div></div>`).join('');
+  let noticePhotos=t.noticeImages.map((src,i)=>`<div style="position:relative"><img class=notice-photo src="${src}" onclick="window.open(this.src)"><button class="pill danger" style="position:absolute;right:8px;top:16px;padding:5px 8px" onclick="removeNoticePhoto('${d}',${i})">삭제</button></div>`).join('');
+  let comments=(db.comments[d]||[]).map((x,i)=>`<div class=comment><b>${x.author}</b><div>${escapeHtml(x.text)}</div><div class=comment-actions><button class=ghost onclick="editComment('${d}',${i})">수정</button><button class=danger onclick="deleteComment('${d}',${i})">삭제</button></div></div>`).join('');
+  el().innerHTML=`<button class="pill ghost" onclick="selected=null;render()">← 달력</button><h2>${d} 훈련</h2>
 <div class=card><div class=form><label>훈련 시간<input value="${t.time||''}" onchange="field('${d}','time',this.value)"></label><label>훈련 장소<input value="${t.place||''}" onchange="field('${d}','place',this.value)"></label></div></div>
-<div class=card><div class=section-title>📣 코치 공지 / 중요내용</div><textarea placeholder="공지사항" onchange="field('${d}','notice',this.value)">${t.notice||''}</textarea><textarea style="margin-top:8px" placeholder="집합시간, 준비물 등 중요내용" onchange="field('${d}','important',this.value)">${t.important||''}</textarea></div>
+<div class=card><div class=section-title>📣 코치 공지 / 중요내용</div><textarea placeholder="공지사항" onchange="field('${d}','notice',this.value)">${t.notice||''}</textarea><textarea style="margin-top:8px" placeholder="집합시간, 준비물 등 중요내용" onchange="field('${d}','important',this.value)">${t.important||''}</textarea><label class="pill ghost" style="display:block;text-align:center;margin-top:10px;cursor:pointer">📷 공지 사진 올리기<input type=file accept="image/*" multiple style="display:none" onchange="addNoticePhotos('${d}',this.files);this.value='' "></label>${noticePhotos}</div>
 <div class=card><div class="row between"><div class=section-title>👥 참석 현황</div><b>아이 가능 ${possible}명 / ${kids.length}명</b></div>${rows}</div>
-<div class=card><div class="row between"><div class=section-title>💰 이날의 비용</div><button class=btn onclick="addExpense('${d}')">+ 지출</button></div>${ex||'<div class=empty>등록된 지출이 없습니다.</div>'}</div>
-<div class=card><div class=section-title>💬 댓글</div>${comments}<div class="row" style="margin-top:10px"><input id=comment placeholder="댓글 입력"><button class=btn onclick="comment('${d}')">등록</button></div></div>`}
-function field(d,k,v){db.trainings[d][k]=v;save()} function att(d,id,s){db.trainings[d].attendance[id]=s;save();render()}
-function addExpense(d){
-  const cats=['간식비','숙박비','코칭비','식대','트랙 입장료','교통·차량비','기타'];
-  let pick=prompt('지출 항목 번호를 입력하세요.\n'+cats.map((x,i)=>(i+1)+'. '+x).join('\n'),'1');
-  if(!pick)return; let idx=Number(pick)-1; if(idx<0||idx>=cats.length)return alert('항목 번호를 확인해주세요.');
-  let cat=cats[idx]; if(cat==='기타'){cat=(prompt('기타 지출 항목 이름을 입력하세요.')||'').trim();if(!cat)return;}
-  let amount=Number((prompt('금액을 숫자로 입력하세요. 예: 85000')||'').replace(/,/g,'')); if(!amount||amount<0)return alert('금액을 확인해주세요.');
-  let memo=prompt('사용 내용 / 메모 (선택)')||'';
-  let inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.setAttribute('capture','environment');
-  inp.onchange=()=>{let f=inp.files[0];if(!f)return commitExpense(d,cat,amount,memo,'');let r=new FileReader();r.onload=()=>commitExpense(d,cat,amount,memo,r.result);r.readAsDataURL(f)};
-  if(confirm('영수증 사진을 첨부할까요?'))inp.click();else commitExpense(d,cat,amount,memo,'');
+<div class=card><div class="row between"><div><div class=section-title>💰 비용</div><div class=expense-total>${money(totalExpense)}</div></div><button class=btn onclick="addExpense('${d}')">+ 지출</button></div>${ex||'<div class=empty>등록된 지출이 없습니다.</div>'}</div>
+<div class=card><div class=section-title>💬 댓글</div>${comments}<div class="row" style="margin-top:10px"><input id=comment placeholder="댓글 입력"><button class=btn onclick="comment('${d}')">등록</button></div></div>`
 }
-function commitExpense(d,cat,amount,memo,image){let id='e'+Date.now();db.trainings[d].expenses.push({id,category:cat,amount,memo,image});db.ledger.push({id,date:d,type:'out',category:cat,amount,memo,source:'training'});save();render()}
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function field(d,k,v){db.trainings[d][k]=v;save()} function att(d,id,s){db.trainings[d].attendance[id]=s;save();render()}
+function addNoticePhotos(d,files){
+  if(!files||!files.length)return;
+  const list=[...files]; let done=0;
+  list.forEach(f=>{let r=new FileReader();r.onload=()=>{db.trainings[d].noticeImages.push(r.result);done++;if(done===list.length){save();render()}};r.readAsDataURL(f)});
+}
+function removeNoticePhoto(d,i){if(!confirm('이 공지 사진을 삭제할까요?'))return;db.trainings[d].noticeImages.splice(i,1);save();render()}
+function addExpense(d){showExpenseForm(d,null)}
+function editExpense(d,i){showExpenseForm(d,i)}
+function showExpenseForm(d,index){
+  const cats=['간식비','숙박비','코칭비','식대','트랙 입장료','교통·차량비','기타'];
+  const old=index===null?null:db.trainings[d].expenses[index];
+  const wrap=document.createElement('div');wrap.style.cssText='position:fixed;inset:0;background:#0008;z-index:99;display:flex;align-items:flex-end;justify-content:center';
+  wrap.innerHTML=`<div style="background:white;width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px"><div class="row between"><div class=section-title>${old?'✏️ 지출 수정':'💳 지출 등록'}</div><button class="pill ghost" id=closeExpense>닫기</button></div><div class=form>
+  <div><b>지출 항목</b><div class=muted>체크박스로 선택하세요. 여러 항목도 가능합니다.</div><div class=check-grid style="margin-top:8px">${cats.map(c=>`<label class=check-item><input type=checkbox class=expCat value="${c}" ${(old&&old.category.split(' + ').includes(c))?'checked':''}>${c}</label>`).join('')}</div><input id=expOther placeholder="기타 항목 직접 입력" style="margin-top:8px"></div>
+  <label>금액<input id=expAmount type=number inputmode=numeric value="${old?old.amount:''}" placeholder="예: 85000"></label>
+  <div class=card style="margin:0"><div class="row between"><b>이번 지출 금액</b><b class=big id=expTotal>${money(old?old.amount:0)}</b></div></div>
+  <label>사용 내용 / 메모<input id=expMemo value="${old?escapeHtml(old.memo||''):''}" placeholder="선택사항"></label>
+  <label class="pill ghost" style="text-align:center;cursor:pointer">🧾 영수증 파일 첨부<input id=expFile type=file accept="image/*,.pdf" style="display:none"></label>
+  <div id=expFileName class=muted>${old&&old.image?'기존 영수증이 첨부되어 있습니다.':''}</div>
+  <button class=btn id=saveExpense style="width:100%">${old?'수정 저장':'지출 저장'}</button></div></div>`;
+  document.body.appendChild(wrap);
+  const amount=wrap.querySelector('#expAmount');amount.oninput=()=>wrap.querySelector('#expTotal').textContent=money(amount.value);
+  wrap.querySelector('#closeExpense').onclick=()=>wrap.remove();
+  wrap.querySelector('#expFile').onchange=e=>{wrap.querySelector('#expFileName').textContent=e.target.files[0]?.name||''};
+  wrap.querySelector('#saveExpense').onclick=()=>{
+    let cats=[...wrap.querySelectorAll('.expCat:checked')].map(x=>x.value);if(!cats.length)return alert('지출 항목을 하나 이상 체크해주세요.');
+    if(cats.includes('기타')){let o=(wrap.querySelector('#expOther').value||'').trim();cats=cats.filter(x=>x!=='기타');cats.push(o||'기타')}
+    let a=Number(amount.value||0);if(a<=0)return alert('금액을 입력해주세요.');let memo=wrap.querySelector('#expMemo').value.trim();let f=wrap.querySelector('#expFile').files[0];
+    const finish=image=>{if(old){let id=old.id||('e'+Date.now());db.trainings[d].expenses[index]={...old,id,category:cats.join(' + '),amount:a,memo,image:image||old.image||''};let l=db.ledger.find(x=>x.id===id);if(l)Object.assign(l,{date:d,type:'out',category:cats.join(' + '),amount:a,memo,source:'training'});else db.ledger.push({id,date:d,type:'out',category:cats.join(' + '),amount:a,memo,source:'training'});}else{commitExpense(d,cats.join(' + '),a,memo,image||'')}save();wrap.remove();render()};
+    if(f){let r=new FileReader();r.onload=()=>finish(r.result);r.readAsDataURL(f)}else finish(old?.image||'');
+  }
+}
+function commitExpense(d,cat,amount,memo,image){let id='e'+Date.now();db.trainings[d].expenses.push({id,category:cat,amount,memo,image});db.ledger.push({id,date:d,type:'out',category:cat,amount,memo,source:'training'})}
 function deleteExpense(d,i){if(!confirm('이 지출과 연결된 장부 기록을 삭제할까요?'))return;let x=db.trainings[d].expenses[i];db.trainings[d].expenses.splice(i,1);if(x.id)db.ledger=db.ledger.filter(l=>l.id!==x.id);save();render()}
 function comment(d){let i=document.getElementById('comment');if(!i.value.trim())return;let author=localStorage.getItem('bmx11_name')||prompt('작성자 이름')||'회원';localStorage.setItem('bmx11_name',author);(db.comments[d]||(db.comments[d]=[])).push({author,text:i.value.trim()});save();render()}
+function editComment(d,i){let arr=db.comments[d]||[];let v=prompt('댓글 수정',arr[i]?.text||'');if(v===null)return;v=v.trim();if(!v)return alert('댓글 내용을 입력해주세요.');arr[i].text=v;save();render()}
+function deleteComment(d,i){if(!confirm('이 댓글을 삭제할까요?'))return;(db.comments[d]||[]).splice(i,1);save();render()}
 function members(){let list=db.members.map(x=>`<div class="card row between"><div><b>${x.name}</b><div class=muted>${x.role==='coach'?'코치':'아이'}</div></div><button class="pill danger" onclick="delMember('${x.id}')">삭제</button></div>`).join('');el().innerHTML=`<div class="row between"><h2>명단 관리</h2><button class=btn onclick=addMember()>+ 추가</button></div>${list}`}
 function addMember(){let name=prompt('이름');if(!name)return;let role=confirm('코치인가요? 확인=코치 / 취소=아이')?'coach':'child';db.members.push({id:'m'+Date.now(),name,role});save();render()}function delMember(id){if(confirm('현재 명단에서 삭제할까요?')){db.members=db.members.filter(x=>x.id!==id);save();render()}}
 function finance(){let inc=db.ledger.filter(x=>x.type==='in').reduce((a,b)=>a+Number(b.amount),0),out=db.ledger.filter(x=>x.type==='out').reduce((a,b)=>a+Number(b.amount),0);let rows=[...db.ledger].reverse().map(x=>`<div class="ledger row between"><div><b>${x.date} · ${x.category}</b><div class=muted>${x.memberName?('입금자: '+x.memberName+(x.memo?' · ':'')) : ''}${x.memo||''}</div></div><div style="text-align:right"><b class="money ${x.type}">${x.type==='in'?'+':'-'}${money(x.amount)}</b><br>${x.source==='training'?'<span class=muted>날짜 화면에서 관리</span>':`<button class="pill danger" style="margin-top:6px;padding:5px 8px" onclick="deleteLedger('${x.id||''}',${db.ledger.indexOf(x)})">삭제</button>`}</div></div>`).join('');el().innerHTML=`<h2>납부 · 회계</h2><div class="card summary"><div><span class=muted>총 입금</span><br><b class="money in">${money(inc)}</b></div><div><span class=muted>총 지출</span><br><b class="money out">${money(out)}</b></div><div><span class=muted>잔액</span><br><b>${money(inc-out)}</b></div></div><div class="row" style="margin-bottom:14px"><button class=btn style="flex:1" onclick="addLedger('in')">+ 입금 등록</button><button class="btn danger" style="flex:1" onclick="addLedger('out')">- 지출 등록</button></div><div class=card><div class=section-title>전체 입출금 장부</div>${rows||'<div class=empty>아직 기록이 없습니다.</div>'}</div>`}
@@ -124,7 +161,7 @@ function showDepositForm(){
 function settings(){el().innerHTML=`<h2>설정 · 백업</h2>
 <div class=card><div class=section-title>💾 데이터 저장</div><p>이 앱은 혼자 관리하는 개인용 버전입니다. 일정·명단·출석·입출금·영수증이 현재 브라우저에 저장됩니다.</p><p class=muted>휴대폰 변경, 브라우저 초기화에 대비해 아래의 전체 백업 파일을 정기적으로 보관해주세요.</p></div>
 <div class=card><div class=section-title>📦 백업 / 복원</div><div class=form><button class=btn onclick=backup()>전체 데이터 백업 파일 받기</button><label class="pill ghost" style="text-align:center;cursor:pointer">백업 파일로 복원<input id=restoreFile type=file accept="application/json,.json" style="display:none" onchange="restore(this.files[0])"></label></div></div>
-<div class=card><div class=section-title>🧹 초기화</div><button class="btn danger" onclick="resetAll()">전체 데이터 초기화</button></div>`}
+<div class=card><div class=section-title>🔒 기존 데이터 보호</div><p>현재 입력되어 있는 명단·일정·출석·비용·댓글은 앱을 업데이트해도 그대로 유지됩니다.</p><p class=muted>실수로 전체 기록이 지워지지 않도록 전체 초기화 기능은 제거했습니다.</p></div>`}
 function backup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BMX11-backup-'+new Date().toLocaleDateString('sv-SE')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function restore(file){if(!file)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x||!x.members||!x.trainings||!x.ledger)throw 0;if(!confirm('현재 데이터를 백업 파일 내용으로 바꿀까요?'))return;db=x;save();alert('복원이 완료되었습니다.');render()}catch(e){alert('BMX11 백업 파일을 확인해주세요.')}};r.readAsText(file)}
 function resetAll(){if(confirm('정말 모든 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.')){db=JSON.parse(JSON.stringify(seed));save();render()}}
