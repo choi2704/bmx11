@@ -28,7 +28,15 @@ let financeMonth=todayMonth(), financeSelected='';
 // 기존 브라우저에 입력된 데이터는 절대 초기화하지 않고, 새 필드만 보완합니다.
 db.members=db.members||[];db.trainings=db.trainings||{};db.ledger=db.ledger||[];db.payments=db.payments||{};db.comments=db.comments||{};
 Object.values(db.trainings).forEach(t=>{t.attendance=t.attendance||{};t.expenses=t.expenses||[];t.noticeImages=t.noticeImages||[]});
-const save=()=>localStorage.setItem(K,JSON.stringify(db)); const el=()=>document.getElementById('main');
+function save(){
+  try{localStorage.setItem(K,JSON.stringify(db));return true}
+  catch(e){
+    console.error(e);
+    alert('저장공간이 부족해서 저장하지 못했습니다. 영수증 사진 수를 줄이거나 백업 후 오래된 큰 사진을 정리해주세요.');
+    return false;
+  }
+}
+const el=()=>document.getElementById('main');
 function money(n){return Number(n||0).toLocaleString('ko-KR')+'원'} function todayMonth(){let d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`} let month=todayMonth();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{view=b.dataset.view;selected=null;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));render()});
 function render(){if(view==='calendar') calendar(); if(view==='members') members(); if(view==='finance') finance(); if(view==='settings') settings()}
@@ -122,7 +130,31 @@ function finance(){
 }
 function shiftFinance(n){const [y,m]=financeMonth.split('-').map(Number), total=y*12+(m-1)+n, ny=Math.floor(total/12), nm=((total%12)+12)%12+1;financeMonth=`${ny}-${String(nm).padStart(2,'0')}`;financeSelected='';render()}
 function readReceipt(file,cb){if(!file)return cb('');let r=new FileReader();r.onload=()=>cb(r.result);r.readAsDataURL(file)}
-function readReceipts(files,cb){let arr=[...(files||[])];if(!arr.length)return cb([]);let out=[],left=arr.length;arr.forEach((file,i)=>{let r=new FileReader();r.onload=()=>{out[i]={name:file.name||('영수증 '+(i+1)),data:r.result,type:file.type||''};if(--left===0)cb(out)};r.readAsDataURL(file)})}
+function fileToDataURL(file){return new Promise((resolve,reject)=>{let r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error||new Error('파일 읽기 실패'));r.readAsDataURL(file)})}
+function imageFromDataURL(data){return new Promise((resolve,reject)=>{let img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('이미지 열기 실패'));img.src=data})}
+async function prepareReceiptFile(file){
+  const type=file.type||'';
+  const name=file.name||'영수증';
+  const raw=await fileToDataURL(file);
+  if(!type.startsWith('image/'))return {name,data:raw,type,originalSize:file.size||0};
+  try{
+    const img=await imageFromDataURL(raw);
+    const maxSide=1200, scale=Math.min(1,maxSide/Math.max(img.width,img.height));
+    const w=Math.max(1,Math.round(img.width*scale)),h=Math.max(1,Math.round(img.height*scale));
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+    const data=c.toDataURL('image/jpeg',0.68);
+    return {name:name.replace(/\.(heic|heif|png|webp)$/i,'.jpg'),data,type:'image/jpeg',originalSize:file.size||0};
+  }catch(e){
+    return {name,data:raw,type,originalSize:file.size||0,compressError:true};
+  }
+}
+async function readReceipts(files,cb){
+  const arr=[...(files||[])];if(!arr.length)return cb([]);
+  const out=[];
+  for(let i=0;i<arr.length;i++)out.push(await prepareReceiptFile(arr[i]));
+  cb(out);
+}
 function showToast(msg){let old=document.getElementById('saveToast');if(old)old.remove();let t=document.createElement('div');t.id='saveToast';t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}
 let receiptOCRLoader=null;
 function ensureReceiptOCR(){
@@ -211,42 +243,105 @@ async function autoReadReceiptAmount(r,onProgress){
 }
 function receiptPreviewHtml(r){if(!r||!r.data)return '';let isImg=(r.type||'').startsWith('image/')||String(r.data).startsWith('data:image/');return `<div class=receipt-card>${isImg?`<a href="${r.data}" target="_blank"><img src="${r.data}" alt="영수증"></a>`:`<a href="${r.data}" target="_blank">📄 ${escapeHtml(r.name||'영수증 파일')}</a>`}${Number(r.amount||0)?`<div class=receipt-amount>${money(r.amount)}</div>`:''}</div>`}
 function showLedgerExpenseForm(index=null){
-  const old=index===null?null:db.ledger[index]; if(old&&old.source==='training')return alert('훈련일 지출은 해당 날짜 화면에서 수정해주세요.');
+  const old=index===null?null:db.ledger[index];
+  if(old&&old.source==='training')return alert('훈련일 지출은 해당 날짜 화면에서 수정해주세요.');
   const cats=['간식비','숙박비','코칭비','식대','트랙 입장료','교통·차량비','기타'];
-  const existing=(old?.receipts&&old.receipts.length)?old.receipts:((old?.receipt||old?.image)?[{name:'기존 영수증',data:old.receipt||old.image,type:String(old.receipt||old.image).startsWith('data:image/')?'image/':'',amount:Number(old.amount||0)}]:[]);
-  const wrap=document.createElement('div');wrap.style.cssText='position:fixed;inset:0;background:#0008;z-index:99;display:flex;align-items:flex-end;justify-content:center';
-  wrap.innerHTML=`<div style="background:white;width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px"><div class="row between"><div class=section-title>${old?'✏️ 회계 지출 수정':'💳 회계 지출 등록'}</div><button class="pill ghost" id=closeLedgerExpense>닫기</button></div><div class=form>
-  <label>날짜<input id=ledDate type=date value="${old?.date||financeSelected||new Date().toLocaleDateString('sv-SE')}"></label>
-  <div><b>지출 항목</b><div class=check-grid style="margin-top:8px">${cats.map(c=>`<label class=check-item><input type=checkbox class=ledCat value="${c}" ${(old&&(old.category||'').split(' + ').includes(c))?'checked':''}>${c}</label>`).join('')}</div><input id=ledOther placeholder="기타 항목 직접 입력" style="margin-top:8px"></div>
-  <div><b>🧾 영수증</b><div class=muted>사진을 선택하면 기존 선택분에 계속 추가됩니다. 휴대폰이 한 번에 여러 장 선택을 지원하면 여러 장을 체크할 수 있고, 지원하지 않는 경우에도 아래 버튼을 다시 눌러 한 장씩 계속 추가할 수 있습니다. 금액은 자동 인식 후 합계에 반영됩니다.</div>
-  <div style="margin-top:9px;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fafbfe">
-    <button type=button id=multiReceiptBtn class="btn" style="width:100%">📷 영수증 여러 장 선택</button>
-    <input id=ledReceipts type=file multiple style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
-    <button type=button id=oneReceiptBtn class="pill ghost" style="width:100%;margin-top:8px">＋ 영수증 한 장씩 추가</button>
-    <input id=oneReceiptInput type=file accept="image/*" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
-    <div id=receiptPickStatus class=muted style="margin-top:6px">선택된 영수증 0장 · 여러 장 선택이 막히는 휴대폰에서는 ‘한 장씩 추가’를 반복해도 모두 누적됩니다.</div>
-  </div>
-  <label class="pill ghost" style="display:block;text-align:center;cursor:pointer;margin-top:7px">📄 PDF 영수증 추가<input id=ledReceiptPdf type=file accept="application/pdf,.pdf" multiple="multiple" style="display:none"></label>
-  <div id=receiptInputs style="display:grid;gap:8px;margin-top:8px"></div></div>
-  <label>영수증 외 추가 금액<input id=ledExtra type=number inputmode=numeric value="${existing.length?0:(old?.amount||'')}" placeholder="영수증 없는 비용이 있으면 입력"></label>
-  <div class=card style="margin:0"><div class="row between"><b>지출 합계</b><b class=big id=ledTotal>${money(old?.amount||0)}</b></div><div class=muted style="margin-top:5px">영수증 금액 + 추가 금액</div></div>
-  <label>메모<input id=ledMemo value="${old?escapeHtml(old.memo||''):''}" placeholder="선택사항"></label>
-  <button class=btn id=saveLedgerExpense style="width:100%">${old?'수정 저장':'지출 저장'}</button><div id=saveState class=muted style="text-align:center"></div></div></div>`;
+  const existing=(old?.receipts&&old.receipts.length)?old.receipts.map(x=>({...x})):
+    ((old?.receipt||old?.image)?[{name:'기존 영수증',data:old.receipt||old.image,type:String(old.receipt||old.image).startsWith('data:image/')?'image/':'',amount:Number(old.amount||0),ocrStatus:'manual'}]:[]);
+  const wrap=document.createElement('div');
+  wrap.style.cssText='position:fixed;inset:0;background:#0008;z-index:99;display:flex;align-items:flex-end;justify-content:center';
+  wrap.innerHTML=`<div style="background:white;width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px">
+    <div class="row between"><div class=section-title>${old?'✏️ 회계 지출 수정':'💳 회계 지출 등록'}</div><button class="pill ghost" id=closeLedgerExpense>닫기</button></div>
+    <div class=form>
+      <label>날짜<input id=ledDate type=date value="${old?.date||financeSelected||new Date().toLocaleDateString('sv-SE')}"></label>
+      <div><b>지출 항목</b><div class=check-grid style="margin-top:8px">${cats.map(c=>`<label class=check-item><input type=checkbox class=ledCat value="${c}" ${(old&&(old.category||'').split(' + ').includes(c))?'checked':''}>${c}</label>`).join('')}</div><input id=ledOther placeholder="기타 항목 직접 입력" style="margin-top:8px"></div>
+      <div class=card style="margin:0">
+        <b>🧾 영수증 사진</b>
+        <div class=muted style="margin:5px 0 9px">휴대폰·컴퓨터 모두 아래 파일 선택창에서 여러 장을 선택할 수 있습니다. 한 번에 한 장만 선택되더라도 다시 눌러 추가하면 기존 사진에 계속 누적됩니다.</div>
+        <input id=ledReceipts type=file accept="image/*" multiple style="padding:9px;background:#fff">
+        <div id=receiptPickStatus class=muted style="margin-top:7px">선택된 영수증 ${existing.length}장</div>
+        <div id=receiptInputs style="display:grid;gap:8px;margin-top:10px"></div>
+      </div>
+      <label>영수증 외 추가 금액<input id=ledExtra type=number inputmode=numeric value="${existing.length?0:(old?.amount||'')}" placeholder="영수증 없는 비용이 있으면 입력"></label>
+      <div class=card style="margin:0"><div class="row between"><b>지출 합계</b><b class=big id=ledTotal>${money(old?.amount||0)}</b></div><div class=muted style="margin-top:5px">영수증에서 인식된 금액 + 직접 수정한 금액 + 추가 금액</div></div>
+      <label>메모<input id=ledMemo value="${old?escapeHtml(old.memo||''):''}" placeholder="선택사항"></label>
+      <button class=btn id=saveLedgerExpense style="width:100%">${old?'수정 저장':'지출 저장'}</button>
+      <div id=saveState class=muted style="text-align:center"></div>
+    </div>
+  </div>`;
   document.body.appendChild(wrap);
-  let receiptState=existing.map(x=>({...x}));
-  const list=wrap.querySelector('#receiptInputs'),extra=wrap.querySelector('#ledExtra'),totalEl=wrap.querySelector('#ledTotal');
-  function calcTotal(){let v=receiptState.reduce((a,r)=>a+Number(r.amount||0),0)+Number(extra.value||0);totalEl.textContent=money(v);return v}
-  function drawReceipts(){list.innerHTML=receiptState.length?receiptState.map((r,i)=>`<div class=receipt-card style="display:grid;grid-template-columns:1fr 120px 44px;gap:7px;align-items:center"><div style="min-width:0"><b style="font-size:13px;word-break:break-all">${escapeHtml(r.name||('영수증 '+(i+1)))}</b><div class=muted style="font-size:11px;margin-top:3px">${r.ocrStatus==='reading'?'금액 자동 인식 중... '+(r.ocrProgress||0)+'%':r.ocrStatus==='done'?(Number(r.amount||0)>0?'자동 인식 완료 · 확인 후 저장':'자동 인식 실패 · 금액 직접 확인'):r.ocrStatus==='pdf'?'PDF는 금액을 직접 확인해주세요.':r.ocrStatus==='error'?('자동 인식 오류 · '+escapeHtml(r.ocrError||'금액 직접 입력')):''}</div></div><input class=rAmt data-i="${i}" type=number inputmode=numeric placeholder="금액" value="${Number(r.amount||0)||''}"><button class="pill danger rDel" data-i="${i}" style="padding:8px">×</button></div>`).join(''):'<div class=muted>첨부된 영수증이 없습니다.</div>';let pickStatus=wrap.querySelector('#receiptPickStatus');if(pickStatus)pickStatus.textContent=`선택된 영수증 ${receiptState.length}장 · 사진 선택 버튼을 다시 눌러 계속 추가할 수 있습니다.`;list.querySelectorAll('.rAmt').forEach(inp=>inp.oninput=()=>{receiptState[Number(inp.dataset.i)].amount=Number(inp.value||0);receiptState[Number(inp.dataset.i)].ocrStatus='manual';calcTotal()});list.querySelectorAll('.rDel').forEach(b=>b.onclick=()=>{receiptState.splice(Number(b.dataset.i),1);drawReceipts();calcTotal()});calcTotal()}
-  drawReceipts();extra.oninput=calcTotal;wrap.querySelector('#closeLedgerExpense').onclick=()=>wrap.remove();
-  async function addReceiptFiles(input){let files=[...(input.files||[])];if(!files.length)return; if(input.id==='ledReceipts'&&files.length===1){wrap.querySelector('#saveState').textContent='이 휴대폰/브라우저가 한 번에 1장만 전달했습니다. 아래 ‘한 장씩 추가’를 반복하면 사진은 계속 누적됩니다.';} files=files.filter(f=>!f.type||f.type.startsWith('image/')||f.type==='application/pdf'||/\.pdf$/i.test(f.name||'')); if(!files.length)return alert('이미지 또는 PDF 영수증을 선택해주세요.');const state=wrap.querySelector('#saveState');state.textContent=`영수증 ${files.length}장 불러오는 중...`;readReceipts(files,async arr=>{const start=receiptState.length;arr.forEach(x=>receiptState.push({...x,amount:0,ocrStatus:((x.type||'').startsWith('image/')?'reading':'pdf'),ocrProgress:0}));drawReceipts();state.textContent=`영수증 ${arr.length}장 추가됨${arr.some(x=>(x.type||'').startsWith('image/'))?' · 금액 자동 인식 시작':''}`;input.value='';for(let j=0;j<arr.length;j++){let idx=start+j,r=receiptState[idx];if(!r||r.ocrStatus==='pdf')continue;try{let amt=await autoReadReceiptAmount(r,p=>{if(receiptState[idx]){receiptState[idx].ocrProgress=p;drawReceipts()}});if(receiptState[idx]){receiptState[idx].amount=amt||0;receiptState[idx].ocrStatus='done';receiptState[idx].ocrProgress=100;drawReceipts()}}catch(err){if(receiptState[idx]){receiptState[idx].ocrStatus='error';receiptState[idx].ocrError=(err&&err.message)||'OCR 오류';receiptState[idx].ocrProgress=0;drawReceipts()}state.textContent='자동 인식 오류: '+((err&&err.message)||'인터넷 연결 또는 브라우저 제한을 확인해주세요.')}}let added=receiptState.slice(start),ok=added.filter(r=>Number(r.amount||0)>0).length;state.textContent=`${arr.length}장 추가 완료 · ${ok}장 금액 인식`;calcTotal()})}
-  const imagePicker=wrap.querySelector('#ledReceipts');
-  const onePicker=wrap.querySelector('#oneReceiptInput');
-  imagePicker.addEventListener('change',e=>addReceiptFiles(e.target));
-  onePicker.addEventListener('change',e=>addReceiptFiles(e.target));
-  wrap.querySelector('#multiReceiptBtn').addEventListener('click',()=>{imagePicker.value='';imagePicker.click()});
-  wrap.querySelector('#oneReceiptBtn').addEventListener('click',()=>{onePicker.value='';onePicker.click()});
-  wrap.querySelector('#ledReceiptPdf').addEventListener('change',e=>addReceiptFiles(e.target));
-  wrap.querySelector('#saveLedgerExpense').onclick=()=>{let cs=[...wrap.querySelectorAll('.ledCat:checked')].map(x=>x.value);if(!cs.length)return alert('지출 항목을 선택해주세요.');if(cs.includes('기타')){let o=wrap.querySelector('#ledOther').value.trim();cs=cs.filter(x=>x!=='기타');cs.push(o||'기타')}let a=calcTotal();if(a<=0)return alert('영수증 금액 또는 추가 금액을 입력해주세요.');if(receiptState.some(r=>Number(r.amount||0)<=0))return alert('자동 인식되지 않은 영수증이 있습니다. 금액을 확인해서 입력해주세요.');let date=wrap.querySelector('#ledDate').value,memo=wrap.querySelector('#ledMemo').value.trim(),btn=wrap.querySelector('#saveLedgerExpense'),state=wrap.querySelector('#saveState');btn.disabled=true;btn.textContent='저장 중...';state.textContent='저장하고 있습니다.';let item={...(old||{}),id:old?.id||('l'+Date.now()),date,type:'out',category:cs.join(' + '),amount:a,memo,receipts:receiptState,receipt:receiptState[0]?.data||old?.receipt||old?.image||''};if(old)db.ledger[index]=item;else db.ledger.push(item);save();state.textContent='저장 완료';setTimeout(()=>{wrap.remove();render();showToast(`✅ 지출 저장 완료 · ${money(a)}`)},180)};
+
+  let receiptState=existing;
+  const picker=wrap.querySelector('#ledReceipts'), list=wrap.querySelector('#receiptInputs'), extra=wrap.querySelector('#ledExtra'), totalEl=wrap.querySelector('#ledTotal'), state=wrap.querySelector('#saveState'), saveBtn=wrap.querySelector('#saveLedgerExpense');
+  let busy=0;
+  function calcTotal(){
+    const v=receiptState.reduce((a,r)=>a+Number(r.amount||0),0)+Number(extra.value||0);
+    totalEl.textContent=money(v);return v;
+  }
+  function updateBusy(delta){busy=Math.max(0,busy+delta);saveBtn.disabled=busy>0;saveBtn.textContent=busy>0?'영수증 처리 중...':(old?'수정 저장':'지출 저장')}
+  function drawReceipts(){
+    wrap.querySelector('#receiptPickStatus').textContent=`선택된 영수증 ${receiptState.length}장`;
+    list.innerHTML=receiptState.length?receiptState.map((r,i)=>`<div class=receipt-card style="display:grid;grid-template-columns:64px 1fr 104px 40px;gap:7px;align-items:center">
+      ${String(r.data||'').startsWith('data:image/')?`<img src="${r.data}" style="width:64px;height:64px;object-fit:cover;border-radius:7px" alt="영수증 ${i+1}">`:'<div>🧾</div>'}
+      <div style="min-width:0"><b style="font-size:12px;word-break:break-all">${escapeHtml(r.name||('영수증 '+(i+1)))}</b><div class=muted style="font-size:11px;margin-top:3px">${r.ocrStatus==='reading'?`금액 자동 인식 중 ${r.ocrProgress||0}%`:r.ocrStatus==='done'?(Number(r.amount||0)>0?'금액 자동 입력 완료':'자동 인식 실패 · 금액 직접 입력'):r.ocrStatus==='error'?'자동 인식 실패 · 금액 직접 입력':r.ocrStatus==='manual'?'직접 입력':''}</div></div>
+      <input class=rAmt data-i="${i}" type=number inputmode=numeric placeholder="금액" value="${Number(r.amount||0)||''}" style="padding:8px">
+      <button type=button class="pill danger rDel" data-i="${i}" style="padding:8px">×</button>
+    </div>`).join(''):'<div class=muted>아직 첨부된 영수증이 없습니다.</div>';
+    list.querySelectorAll('.rAmt').forEach(inp=>inp.oninput=()=>{const i=Number(inp.dataset.i);if(receiptState[i]){receiptState[i].amount=Number(inp.value||0);receiptState[i].ocrStatus='manual';calcTotal()}});
+    list.querySelectorAll('.rDel').forEach(b=>b.onclick=()=>{receiptState.splice(Number(b.dataset.i),1);drawReceipts();calcTotal()});
+    calcTotal();
+  }
+  drawReceipts();
+  extra.oninput=calcTotal;
+  wrap.querySelector('#closeLedgerExpense').onclick=()=>wrap.remove();
+
+  picker.addEventListener('change',async()=>{
+    const files=[...(picker.files||[])];
+    if(!files.length)return;
+    updateBusy(1);state.textContent=`영수증 ${files.length}장 불러오는 중...`;
+    try{
+      const prepared=[];
+      await readReceipts(files,x=>prepared.push(...x));
+      const start=receiptState.length;
+      prepared.forEach(x=>receiptState.push({...x,amount:0,ocrStatus:'reading',ocrProgress:0}));
+      drawReceipts();
+      state.textContent=`${prepared.length}장 추가 완료 · 금액 자동 인식 중...`;
+      picker.value='';
+      // OCR은 한 장씩 처리하여 휴대폰 메모리 부담을 줄입니다.
+      for(let j=0;j<prepared.length;j++){
+        const idx=start+j;
+        try{
+          const amt=await autoReadReceiptAmount(receiptState[idx],p=>{if(receiptState[idx]){receiptState[idx].ocrProgress=p;drawReceipts()}});
+          if(receiptState[idx]){receiptState[idx].amount=amt||0;receiptState[idx].ocrStatus='done';receiptState[idx].ocrProgress=100;drawReceipts()}
+        }catch(e){
+          if(receiptState[idx]){receiptState[idx].ocrStatus='error';receiptState[idx].ocrError=(e&&e.message)||'OCR 실패';drawReceipts()}
+        }
+      }
+      const ok=receiptState.slice(start).filter(r=>Number(r.amount||0)>0).length;
+      state.textContent=`✅ 영수증 ${prepared.length}장 추가 · ${ok}장 금액 자동 입력${ok<prepared.length?' · 나머지는 금액칸에 직접 입력 가능':''}`;
+    }catch(e){
+      console.error(e);state.textContent='영수증을 불러오지 못했습니다. 다른 사진으로 다시 선택해주세요.';
+    }finally{updateBusy(-1);calcTotal()}
+  });
+
+  saveBtn.onclick=()=>{
+    if(busy)return;
+    let cs=[...wrap.querySelectorAll('.ledCat:checked')].map(x=>x.value);
+    if(!cs.length)return alert('지출 항목을 선택해주세요.');
+    if(cs.includes('기타')){let o=wrap.querySelector('#ledOther').value.trim();cs=cs.filter(x=>x!=='기타');cs.push(o||'기타')}
+    const a=calcTotal();if(a<=0)return alert('영수증 금액 또는 추가 금액을 입력해주세요.');
+    const date=wrap.querySelector('#ledDate').value,memo=wrap.querySelector('#ledMemo').value.trim();
+    saveBtn.disabled=true;saveBtn.textContent='저장 중...';state.textContent='저장하고 있습니다.';
+    const item={...(old||{}),id:old?.id||('l'+Date.now()),date,type:'out',category:cs.join(' + '),amount:a,memo,receipts:receiptState,receipt:receiptState[0]?.data||old?.receipt||old?.image||''};
+    const prev=index===null?null:db.ledger[index];
+    if(old)db.ledger[index]=item;else db.ledger.push(item);
+    if(!save()){
+      if(old)db.ledger[index]=prev;else db.ledger.pop();
+      saveBtn.disabled=false;saveBtn.textContent=old?'수정 저장':'지출 저장';state.textContent='❌ 저장 실패';return;
+    }
+    state.textContent='✅ 저장 완료';
+    setTimeout(()=>{wrap.remove();render();showToast(`✅ 지출 저장 완료 · ${money(a)}`)},250);
+  };
 }
 function editLedger(index){let x=db.ledger[index];if(!x)return;if(x.type==='out')return showLedgerExpenseForm(index);showDepositForm(index)}
 function deleteLedger(id,index){if(!confirm('이 장부 기록을 삭제할까요?'))return;if(id)db.ledger=db.ledger.filter(x=>x.id!==id);else db.ledger.splice(index,1);save();render()}
