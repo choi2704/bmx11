@@ -84,16 +84,16 @@ function showExpenseForm(d,index){
     (old?.image?[{name:'기존 영수증',data:old.image,type:String(old.image).startsWith('data:image/')?'image/':'',amount:Number(old.amount||0),ocrStatus:'manual'}]:[]);
   const wrap=document.createElement('div');wrap.style.cssText='position:fixed;inset:0;background:#0008;z-index:99;display:flex;align-items:flex-end;justify-content:center';
   wrap.innerHTML=`<div style="background:white;width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px"><div class="row between"><div class=section-title>${old?'✏️ 지출 수정':'💳 지출 등록'}</div><button class="pill ghost" id=closeExpense>닫기</button></div><div class=form>
-  <div><b>지출 항목</b><div class=muted>체크박스로 선택하세요. 여러 항목도 가능합니다.</div><div class=check-grid style="margin-top:8px">${cats.map(c=>`<label class=check-item><input type=checkbox class=expCat value="${c}" ${(old&&(old.category||'').split(' + ').includes(c))?'checked':''}>${c}</label>`).join('')}</div><input id=expOther placeholder="기타 항목 직접 입력" style="margin-top:8px"></div>
+  <div><b>지출 항목</b><div class=muted>체크박스로 선택하세요. 여러 항목도 가능합니다.</div><div class=check-grid style="margin-top:8px">${cats.map(c=>`<label class=check-item><input type=checkbox class=expCat value="${c}" ${(old&&(old.category||'').split(' + ').includes(c))?'checked':''}>${c}</label>`).join('')}</div><input id=expOther placeholder="기타 항목 금액 직접 입력" style="margin-top:8px"></div>
   <div class=card style="margin:0">
     <b>🧾 영수증 사진</b>
-    <div class=muted style="margin:5px 0 9px">여러 장을 한 번에 선택할 수 있습니다. 한 장만 선택되는 기기에서는 다시 눌러 추가하면 기존 사진에 계속 누적됩니다. 사진을 올리면 금액을 자동 인식해 합산합니다.</div>
+    <div class=muted style="margin:5px 0 9px">영수증 사진을 여러 장 첨부할 수 있습니다. 각 영수증 금액을 입력하면 아래 지출 합계가 자동으로 계산됩니다.</div>
     <input id=expReceipts type=file accept="image/*" multiple style="padding:9px;background:#fff">
     <div id=expReceiptStatus class=muted style="margin-top:7px">선택된 영수증 ${existing.length}장</div>
     <div id=expReceiptInputs style="display:grid;gap:8px;margin-top:10px"></div>
   </div>
   <label>영수증 외 추가 금액<input id=expExtra type=number inputmode=numeric value="${existing.length?0:(old?.amount||'')}" placeholder="영수증 없는 비용이 있으면 입력"></label>
-  <div class=card style="margin:0"><div class="row between"><b>이번 지출 합계</b><b class=big id=expTotal>${money(old?old.amount:0)}</b></div><div class=muted style="margin-top:5px">영수증 자동 인식 금액 + 직접 수정한 금액 + 추가 금액</div></div>
+  <div class=card style="margin:0"><div class="row between"><b>이번 지출 합계</b><b class=big id=expTotal>${money(old?old.amount:0)}</b></div><div class=muted style="margin-top:5px">영수증별 입력 금액 + 추가 금액</div></div>
   <label>사용 내용 / 메모<input id=expMemo value="${old?escapeHtml(old.memo||''):''}" placeholder="선택사항"></label>
   <button class=btn id=saveExpense style="width:100%">${old?'수정 저장':'지출 저장'}</button><div id=expSaveState class=muted style="text-align:center"></div></div></div>`;
   document.body.appendChild(wrap);
@@ -107,7 +107,7 @@ function showExpenseForm(d,index){
     wrap.querySelector('#expReceiptStatus').textContent=`선택된 영수증 ${receiptState.length}장`;
     list.innerHTML=receiptState.length?receiptState.map((r,i)=>`<div class=receipt-card style="display:grid;grid-template-columns:64px 1fr 104px 40px;gap:7px;align-items:center">
       ${String(r.data||'').startsWith('data:image/')?`<img src="${r.data}" style="width:64px;height:64px;object-fit:cover;border-radius:7px;cursor:zoom-in" alt="영수증 ${i+1} - 클릭하면 크게 보기" onclick="openReceiptViewer(this)">`:'<div>🧾</div>'}
-      <div style="min-width:0"><b style="font-size:12px;word-break:break-all">${escapeHtml(r.name||('영수증 '+(i+1)))}</b><div class=muted style="font-size:11px;margin-top:3px">${r.ocrStatus==='reading'?`금액 자동 인식 중 ${r.ocrProgress||0}%`:r.ocrStatus==='done'?(Number(r.amount||0)>0?'금액 자동 입력 완료':'자동 인식 실패 · 금액 직접 입력'):r.ocrStatus==='error'?'자동 인식 실패 · 금액 직접 입력':r.ocrStatus==='manual'?'직접 입력':''}</div></div>
+      <div style="min-width:0"><b style="font-size:12px;word-break:break-all">${escapeHtml(r.name||('영수증 '+(i+1)))}</b><div class=muted style="font-size:11px;margin-top:3px">금액을 입력하면 합계가 자동 계산됩니다</div></div>
       <input class=expRAmt data-i="${i}" type=number inputmode=numeric placeholder="금액" value="${Number(r.amount||0)||''}" style="padding:8px">
       <button type=button class="pill danger expRDel" data-i="${i}" style="padding:8px">×</button>
     </div>`).join(''):'<div class=muted>아직 첨부된 영수증이 없습니다.</div>';
@@ -122,15 +122,9 @@ function showExpenseForm(d,index){
     updateBusy(1);state.textContent=`영수증 ${files.length}장 불러오는 중...`;
     try{
       const prepared=[];await readReceipts(files,x=>prepared.push(...x));
-      const start=receiptState.length;prepared.forEach(x=>receiptState.push({...x,amount:0,ocrStatus:'reading',ocrProgress:0}));drawReceipts();picker.value='';
-      state.textContent=`${prepared.length}장 추가 완료 · 금액 자동 인식 중...`;
-      for(let j=0;j<prepared.length;j++){
-        const idx=start+j;
-        try{const amt=await autoReadReceiptAmount(receiptState[idx],p=>{if(receiptState[idx]){receiptState[idx].ocrProgress=p;drawReceipts()}});if(receiptState[idx]){receiptState[idx].amount=amt||0;receiptState[idx].ocrStatus='done';receiptState[idx].ocrProgress=100;drawReceipts()}}
-        catch(e){if(receiptState[idx]){receiptState[idx].ocrStatus='error';receiptState[idx].ocrError=(e&&e.message)||'OCR 실패';drawReceipts()}}
-      }
-      const ok=receiptState.slice(start).filter(r=>Number(r.amount||0)>0).length;
-      state.textContent=`✅ 영수증 ${prepared.length}장 추가 · ${ok}장 금액 자동 입력${ok<prepared.length?' · 나머지는 금액칸에 직접 입력 가능':''}`;
+      prepared.forEach(x=>receiptState.push({...x,amount:0,ocrStatus:'manual'}));
+      drawReceipts();picker.value='';
+      state.textContent=`✅ 영수증 ${prepared.length}장 추가 완료 · 각 영수증 금액을 입력해주세요.`;
     }catch(e){console.error(e);state.textContent='영수증을 불러오지 못했습니다. 다른 사진으로 다시 선택해주세요.'}
     finally{updateBusy(-1);calcTotal()}
   });
@@ -271,121 +265,6 @@ async function readReceipts(files,cb){
   cb(out);
 }
 function showToast(msg){let old=document.getElementById('saveToast');if(old)old.remove();let t=document.createElement('div');t.id='saveToast';t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}
-let receiptOCRLoader=null;
-function ensureReceiptOCR(){
-  if(window.Tesseract)return Promise.resolve(window.Tesseract);
-  if(receiptOCRLoader)return receiptOCRLoader;
-  receiptOCRLoader=new Promise((resolve,reject)=>{
-    const sc=document.createElement('script');
-    sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-    sc.crossOrigin='anonymous';
-    sc.onload=()=>window.Tesseract?resolve(window.Tesseract):reject(new Error('OCR 엔진을 불러오지 못했습니다.'));
-    sc.onerror=()=>reject(new Error('OCR 엔진을 불러오지 못했습니다. 인터넷 연결을 확인해주세요.'));
-    document.head.appendChild(sc);
-  });
-  return receiptOCRLoader;
-}
-function receiptAmountFromText(text){
-  const lines=String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-
-  // 영수증에서 '최종 결제 금액'을 뜻하는 문구를 가장 우선합니다.
-  // OCR이 띄어쓰기를 제멋대로 읽는 경우가 있어 비교할 때 공백/기호를 제거합니다.
-  const priority=[
-    {keys:['합계금액','총구매액','총구매금액','총결제금액','최종결제금액','결제금액','승인금액','받을금액','청구금액','카드결제금액'],score:1000},
-    {keys:['합계','총액','결제합계','총계','TOTAL','GRANDTOTAL','AMOUNTDUE','AMOUNTPAID','TOTALAMOUNT'],score:850},
-    {keys:['카드금액','현금금액','판매금액','공급대가'],score:500}
-  ];
-  const exclude=['부가세','부가가치세','과세','면세','공급가','공급가액','할인','쿠폰','포인트','거스름','잔액','사업자','전화','TEL','승인번호','카드번호','가맹점번호','일시','날짜','거래일','영수증번호','포스번호','POS','사업자번호'];
-
-  const norm=t=>String(t||'').toUpperCase().replace(/[\s:\-_=·.\[\]()]/g,'');
-  const numbersFrom=line=>{
-    const out=[];
-    const ms=String(line||'').match(/(?:₩|￦|KRW)?\s*\d[\d,\.\s]{0,15}(?:\s*원)?/gi)||[];
-    for(const raw of ms){
-      const digits=raw.replace(/[^0-9]/g,'');
-      if(!digits)continue;
-      const n=Number(digits);
-      if(!Number.isFinite(n)||n<100||n>30000000)continue;
-      // 날짜/시간/전화번호/승인번호로 보이는 긴 숫자는 제외
-      if(/^20\d{6}$/.test(digits)||/^20\d{4}$/.test(digits)||digits.length>=10)continue;
-      out.push({n,raw});
-    }
-    return out;
-  };
-
-  const candidates=[];
-  for(let i=0;i<lines.length;i++){
-    const line=lines[i], nline=norm(line);
-    let keyScore=0, matched='';
-    for(const group of priority){
-      const k=group.keys.find(k=>nline.includes(norm(k)));
-      if(k){keyScore=group.score;matched=k;break;}
-    }
-    if(!keyScore)continue;
-
-    const bad=exclude.some(k=>nline.includes(norm(k)));
-    if(bad && keyScore<800)continue;
-
-    // 1순위: 키워드와 같은 줄의 금액. 보통 줄의 마지막 금액이 최종값입니다.
-    const same=numbersFrom(line);
-    same.forEach((x,j)=>candidates.push({n:x.n,score:keyScore+180+j*8,line:i,key:matched}));
-
-    // 2순위: 키워드 다음 줄에 금액만 크게 찍히는 영수증 대응
-    for(let d=1;d<=2;d++){
-      if(i+d>=lines.length)break;
-      const nearLine=lines[i+d], nearNorm=norm(nearLine);
-      // 다음 항목명이 시작되면 더 멀리 찾지 않음
-      const anotherKey=priority.some(g=>g.keys.some(k=>nearNorm.includes(norm(k))));
-      const nearNums=numbersFrom(nearLine);
-      nearNums.forEach((x,j)=>candidates.push({n:x.n,score:keyScore+(d===1?120:70)+j*5,line:i+d,key:matched}));
-      if(anotherKey)break;
-    }
-  }
-
-  if(candidates.length){
-    // 키워드 우선순위 > 같은/가까운 줄 > 금액 순으로 결정
-    candidates.sort((a,b)=>b.score-a.score||b.n-a.n);
-    return candidates[0].n;
-  }
-
-  // '합계/총구매액/결제금액' 류 문구를 못 읽은 경우에는
-  // 엉뚱한 날짜·승인번호를 금액으로 넣지 않고 자동입력을 하지 않습니다.
-  return 0;
-}
-function loadImageData(data){
-  return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=data});
-}
-async function preprocessReceipt(data){
-  try{
-    const img=await loadImageData(data);
-    const maxW=1800, scale=Math.min(2, maxW/Math.max(1,img.width));
-    const w=Math.max(1,Math.round(img.width*scale)),h=Math.max(1,Math.round(img.height*scale));
-    const c=document.createElement('canvas');c.width=w;c.height=h;
-    const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0,w,h);
-    const im=ctx.getImageData(0,0,w,h),d=im.data;
-    for(let i=0;i<d.length;i+=4){
-      let g=.299*d[i]+.587*d[i+1]+.114*d[i+2];
-      // 대비 강화 + 밝은 영수증 배경 정리
-      g=Math.max(0,Math.min(255,(g-128)*1.65+150));
-      d[i]=d[i+1]=d[i+2]=g;
-    }
-    ctx.putImageData(im,0,0);
-    return c.toDataURL('image/jpeg',.92);
-  }catch(e){return data}
-}
-async function autoReadReceiptAmount(r,onProgress){
-  if(!r||!r.data)return 0;
-  const isImg=(r.type||'').startsWith('image/')||String(r.data).startsWith('data:image/');
-  if(!isImg)return 0;
-  const T=await ensureReceiptOCR();
-  const input=await preprocessReceipt(r.data);
-  // 한글 영수증의 '합계금액/총구매액/합계/결제금액' 문구를 읽기 위해 kor+eng OCR을 사용합니다.
-  const result=await T.recognize(input,'kor+eng',{
-    logger:m=>{if(onProgress&&m.status==='recognizing text')onProgress(Math.round((m.progress||0)*100))},
-    langPath:'https://tessdata.projectnaptha.com/4.0.0'
-  });
-  return receiptAmountFromText(result?.data?.text||'');
-}
 function receiptPreviewHtml(r){if(!r||!r.data)return '';let isImg=(r.type||'').startsWith('image/')||String(r.data).startsWith('data:image/');return `<div class=receipt-card>${isImg?`<button type=button class=receipt-zoom onclick="openReceiptViewer(this.querySelector('img'))" title="영수증 크게 보기"><img src="${r.data}" alt="영수증 - 클릭하면 크게 보기"></button>`:`<a href="${r.data}" target="_blank">📄 ${escapeHtml(r.name||'영수증 파일')}</a>`}${Number(r.amount||0)?`<div class=receipt-amount>${money(r.amount)}</div>`:''}</div>`}
 function showLedgerExpenseForm(index=null){
   const old=index===null?null:db.ledger[index];
@@ -399,7 +278,7 @@ function showLedgerExpenseForm(index=null){
     <div class="row between"><div class=section-title>${old?'✏️ 회계 지출 수정':'💳 회계 지출 등록'}</div><button class="pill ghost" id=closeLedgerExpense>닫기</button></div>
     <div class=form>
       <label>날짜<input id=ledDate type=date value="${old?.date||financeSelected||new Date().toLocaleDateString('sv-SE')}"></label>
-      <div><b>지출 항목</b><div class=check-grid style="margin-top:8px">${cats.map(c=>`<label class=check-item><input type=checkbox class=ledCat value="${c}" ${(old&&(old.category||'').split(' + ').includes(c))?'checked':''}>${c}</label>`).join('')}</div><input id=ledOther placeholder="기타 항목 직접 입력" style="margin-top:8px"></div>
+      <div><b>지출 항목</b><div class=check-grid style="margin-top:8px">${cats.map(c=>`<label class=check-item><input type=checkbox class=ledCat value="${c}" ${(old&&(old.category||'').split(' + ').includes(c))?'checked':''}>${c}</label>`).join('')}</div><input id=ledOther placeholder="기타 항목 금액 직접 입력" style="margin-top:8px"></div>
       <div class=card style="margin:0">
         <b>🧾 영수증 사진</b>
         <div class=muted style="margin:5px 0 9px">휴대폰·컴퓨터 모두 아래 파일 선택창에서 여러 장을 선택할 수 있습니다. 한 번에 한 장만 선택되더라도 다시 눌러 추가하면 기존 사진에 계속 누적됩니다.</div>
@@ -408,7 +287,7 @@ function showLedgerExpenseForm(index=null){
         <div id=receiptInputs style="display:grid;gap:8px;margin-top:10px"></div>
       </div>
       <label>영수증 외 추가 금액<input id=ledExtra type=number inputmode=numeric value="${existing.length?0:(old?.amount||'')}" placeholder="영수증 없는 비용이 있으면 입력"></label>
-      <div class=card style="margin:0"><div class="row between"><b>지출 합계</b><b class=big id=ledTotal>${money(old?.amount||0)}</b></div><div class=muted style="margin-top:5px">영수증에서 인식된 금액 + 직접 수정한 금액 + 추가 금액</div></div>
+      <div class=card style="margin:0"><div class="row between"><b>지출 합계</b><b class=big id=ledTotal>${money(old?.amount||0)}</b></div><div class=muted style="margin-top:5px">영수증별 입력 금액 + 추가 금액</div></div>
       <label>메모<input id=ledMemo value="${old?escapeHtml(old.memo||''):''}" placeholder="선택사항"></label>
       <button class=btn id=saveLedgerExpense style="width:100%">${old?'수정 저장':'지출 저장'}</button>
       <div id=saveState class=muted style="text-align:center"></div>
@@ -428,7 +307,7 @@ function showLedgerExpenseForm(index=null){
     wrap.querySelector('#receiptPickStatus').textContent=`선택된 영수증 ${receiptState.length}장`;
     list.innerHTML=receiptState.length?receiptState.map((r,i)=>`<div class=receipt-card style="display:grid;grid-template-columns:64px 1fr 104px 40px;gap:7px;align-items:center">
       ${String(r.data||'').startsWith('data:image/')?`<img src="${r.data}" style="width:64px;height:64px;object-fit:cover;border-radius:7px;cursor:zoom-in" alt="영수증 ${i+1} - 클릭하면 크게 보기" onclick="openReceiptViewer(this)">`:'<div>🧾</div>'}
-      <div style="min-width:0"><b style="font-size:12px;word-break:break-all">${escapeHtml(r.name||('영수증 '+(i+1)))}</b><div class=muted style="font-size:11px;margin-top:3px">${r.ocrStatus==='reading'?`금액 자동 인식 중 ${r.ocrProgress||0}%`:r.ocrStatus==='done'?(Number(r.amount||0)>0?'금액 자동 입력 완료':'자동 인식 실패 · 금액 직접 입력'):r.ocrStatus==='error'?'자동 인식 실패 · 금액 직접 입력':r.ocrStatus==='manual'?'직접 입력':''}</div></div>
+      <div style="min-width:0"><b style="font-size:12px;word-break:break-all">${escapeHtml(r.name||('영수증 '+(i+1)))}</b><div class=muted style="font-size:11px;margin-top:3px">금액을 입력하면 합계가 자동 계산됩니다</div></div>
       <input class=rAmt data-i="${i}" type=number inputmode=numeric placeholder="금액" value="${Number(r.amount||0)||''}" style="padding:8px">
       <button type=button class="pill danger rDel" data-i="${i}" style="padding:8px">×</button>
     </div>`).join(''):'<div class=muted>아직 첨부된 영수증이 없습니다.</div>';
@@ -447,23 +326,9 @@ function showLedgerExpenseForm(index=null){
     try{
       const prepared=[];
       await readReceipts(files,x=>prepared.push(...x));
-      const start=receiptState.length;
-      prepared.forEach(x=>receiptState.push({...x,amount:0,ocrStatus:'reading',ocrProgress:0}));
-      drawReceipts();
-      state.textContent=`${prepared.length}장 추가 완료 · 금액 자동 인식 중...`;
-      picker.value='';
-      // OCR은 한 장씩 처리하여 휴대폰 메모리 부담을 줄입니다.
-      for(let j=0;j<prepared.length;j++){
-        const idx=start+j;
-        try{
-          const amt=await autoReadReceiptAmount(receiptState[idx],p=>{if(receiptState[idx]){receiptState[idx].ocrProgress=p;drawReceipts()}});
-          if(receiptState[idx]){receiptState[idx].amount=amt||0;receiptState[idx].ocrStatus='done';receiptState[idx].ocrProgress=100;drawReceipts()}
-        }catch(e){
-          if(receiptState[idx]){receiptState[idx].ocrStatus='error';receiptState[idx].ocrError=(e&&e.message)||'OCR 실패';drawReceipts()}
-        }
-      }
-      const ok=receiptState.slice(start).filter(r=>Number(r.amount||0)>0).length;
-      state.textContent=`✅ 영수증 ${prepared.length}장 추가 · ${ok}장 금액 자동 입력${ok<prepared.length?' · 나머지는 금액칸에 직접 입력 가능':''}`;
+      prepared.forEach(x=>receiptState.push({...x,amount:0,ocrStatus:'manual'}));
+      drawReceipts();picker.value='';
+      state.textContent=`✅ 영수증 ${prepared.length}장 추가 완료 · 각 영수증 금액을 입력해주세요.`;
     }catch(e){
       console.error(e);state.textContent='영수증을 불러오지 못했습니다. 다른 사진으로 다시 선택해주세요.';
     }finally{updateBusy(-1);calcTotal()}
@@ -497,8 +362,8 @@ function showDepositForm(index=null){
   wrap.innerHTML=`<div style="background:white;width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px"><div class="row between"><div class=section-title>${old?'✏️ 입금 수정':'💰 입금 등록'}</div><button class="pill ghost" id=closeDeposit>닫기</button></div><div class=form>
       <label>입금 날짜<input id=depDate type=date value="${old?.date||financeSelected||new Date().toLocaleDateString('sv-SE')}"></label>
       <div><b>입금한 회원</b><div class=muted>명단의 아이가 자동으로 표시됩니다.</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:8px">${members.map(x=>`<label style="border:1px solid #dfe4ec;border-radius:10px;padding:10px"><input style="width:auto" type=radio name=depMember value="${x.id}" data-name="${x.name}" ${old?.memberId===x.id?'checked':''}> ${x.name}</label>`).join('')}</div></div>
-      <div><b>입금 항목</b><div class=muted>여러 항목을 동시에 체크할 수 있습니다.</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:8px">${['코칭비','간식비','숙박비','식대','트랙 입장료','기타'].map(x=>`<label style="border:1px solid #dfe4ec;border-radius:10px;padding:10px"><input style="width:auto" type=checkbox class=depCat value="${x}" ${(old&&(old.category||'').split(' + ').includes(x))?'checked':''}> ${x}</label>`).join('')}</div><input id=depOther placeholder="기타 항목 직접 입력" style="margin-top:8px"></div>
-      ${old?`<label>입금 금액<input id=depEditAmount type=number inputmode=numeric value="${old.amount||0}"></label>`:`<div><b>금액 빠른 입력</b><div class=muted>중복 체크하면 자동으로 합산됩니다.</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:8px">${[10000,30000,50000,70000,90000].map(n=>`<label style="border:1px solid #dfe4ec;border-radius:10px;padding:10px;text-align:center"><input style="width:auto" type=checkbox class=depAmt value="${n}"> ${n/10000}만원</label>`).join('')}</div></div><label>추가 금액<input id=depCustom type=number inputmode=numeric placeholder="필요하면 직접 입력"></label>`}
+      <div><b>입금 항목</b><div class=muted>여러 항목을 동시에 체크할 수 있습니다.</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:8px">${['코칭비','간식비','숙박비','식대','트랙 입장료','기타'].map(x=>`<label style="border:1px solid #dfe4ec;border-radius:10px;padding:10px"><input style="width:auto" type=checkbox class=depCat value="${x}" ${(old&&(old.category||'').split(' + ').includes(x))?'checked':''}> ${x}</label>`).join('')}</div><input id=depOther placeholder="기타 항목 금액 직접 입력" style="margin-top:8px"></div>
+      ${old?`<label>입금 금액<input id=depEditAmount type=number inputmode=numeric value="${old.amount||0}"></label>`:`<div><b>금액 빠른 입력</b><div class=muted>중복 체크하면 자동으로 합산됩니다.</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:8px">${[10000,30000,50000,70000,90000].map(n=>`<label style="border:1px solid #dfe4ec;border-radius:10px;padding:10px;text-align:center"><input style="width:auto" type=checkbox class=depAmt value="${n}"> ${n/10000}만원</label>`).join('')}</div></div><label>추가 금액<input id=depCustom type=number inputmode=numeric placeholder="필요하면 금액 직접 입력"></label>`}
       <div class=card style="margin:0"><div class="row between"><b>입금 합계</b><b class=big id=depTotal>${money(old?.amount||0)}</b></div></div>
       <label>메모<input id=depMemo value="${old?escapeHtml(old.memo||''):''}" placeholder="선택사항"></label>
       <label class="pill ghost" style="text-align:center;cursor:pointer">🧾 영수증 첨부<input id=depReceipt type=file accept="image/*,.pdf" style="display:none"></label><div id=depFileName class=muted>${old&&(old.receipt||old.image)?'기존 영수증이 첨부되어 있습니다.':''}</div>
