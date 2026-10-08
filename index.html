@@ -57,7 +57,7 @@ function detail(d){
   let possible=kids.filter(x=>t.attendance[x.id]==='g').length;
   let rows=db.members.map(x=>`<div class=status><div><b>${x.name}</b><div class=muted>${x.role==='coach'?'코치':'아이'}</div></div>${['g','y','r'].map((s,i)=>`<button class="${s} ${t.attendance[x.id]===s?'on':''}" onclick="att('${d}','${x.id}','${s}')">${['가능','조정','불가'][i]}</button>`).join('')}</div>`).join('');
   let totalExpense=t.expenses.reduce((a,x)=>a+Number(x.amount||0),0);
-  let ex=t.expenses.map((x,i)=>`<div class="ledger row between"><div style="min-width:0"><b>${x.category}</b><div class=muted>${x.memo||''}</div>${x.image?`<img class=receipt src="${x.image}" onclick="window.open(this.src)" title="영수증 크게 보기">`:''}</div><div style="text-align:right;white-space:nowrap"><b class="money out">-${money(x.amount)}</b><br><button class="pill ghost" style="margin-top:7px;padding:6px 9px" onclick="editExpense('${d}',${i})">수정</button> <button class="pill danger" style="margin-top:7px;padding:6px 9px" onclick="deleteExpense('${d}',${i})">삭제</button></div></div>`).join('');
+  let ex=t.expenses.map((x,i)=>{let rs=(x.receipts&&x.receipts.length)?x.receipts:(x.image?[{name:'영수증',data:x.image,type:String(x.image).startsWith('data:image/')?'image/':'',amount:x.amount||0}]:[]);return `<div class="ledger row between"><div style="min-width:0;flex:1"><b>${x.category}</b><div class=muted>${x.memo||''}</div>${rs.length?`<div class=receipt-grid>${rs.map(receiptPreviewHtml).join('')}</div>`:''}</div><div style="text-align:right;white-space:nowrap"><b class="money out">-${money(x.amount)}</b><br><button class="pill ghost" style="margin-top:7px;padding:6px 9px" onclick="editExpense('${d}',${i})">수정</button> <button class="pill danger" style="margin-top:7px;padding:6px 9px" onclick="deleteExpense('${d}',${i})">삭제</button></div></div>`}).join('');
   let noticePhotos=t.noticeImages.map((src,i)=>`<div style="position:relative"><img class=notice-photo src="${src}" onclick="window.open(this.src)"><button class="pill danger" style="position:absolute;right:8px;top:16px;padding:5px 8px" onclick="removeNoticePhoto('${d}',${i})">삭제</button></div>`).join('');
   let comments=(db.comments[d]||[]).map((x,i)=>`<div class=comment><b>${x.author}</b><div>${escapeHtml(x.text)}</div><div class=comment-actions><button class=ghost onclick="editComment('${d}',${i})">수정</button><button class=danger onclick="deleteComment('${d}',${i})">삭제</button></div></div>`).join('');
   el().innerHTML=`<button class="pill ghost" onclick="selected=null;render()">← 달력</button><h2>${d} 훈련</h2>
@@ -80,25 +80,83 @@ function editExpense(d,i){showExpenseForm(d,i)}
 function showExpenseForm(d,index){
   const cats=['간식비','숙박비','코칭비','식대','트랙 입장료','교통·차량비','기타'];
   const old=index===null?null:db.trainings[d].expenses[index];
+  const existing=(old?.receipts&&old.receipts.length)?old.receipts.map(x=>({...x})):
+    (old?.image?[{name:'기존 영수증',data:old.image,type:String(old.image).startsWith('data:image/')?'image/':'',amount:Number(old.amount||0),ocrStatus:'manual'}]:[]);
   const wrap=document.createElement('div');wrap.style.cssText='position:fixed;inset:0;background:#0008;z-index:99;display:flex;align-items:flex-end;justify-content:center';
   wrap.innerHTML=`<div style="background:white;width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px"><div class="row between"><div class=section-title>${old?'✏️ 지출 수정':'💳 지출 등록'}</div><button class="pill ghost" id=closeExpense>닫기</button></div><div class=form>
-  <div><b>지출 항목</b><div class=muted>체크박스로 선택하세요. 여러 항목도 가능합니다.</div><div class=check-grid style="margin-top:8px">${cats.map(c=>`<label class=check-item><input type=checkbox class=expCat value="${c}" ${(old&&old.category.split(' + ').includes(c))?'checked':''}>${c}</label>`).join('')}</div><input id=expOther placeholder="기타 항목 직접 입력" style="margin-top:8px"></div>
-  <label>금액<input id=expAmount type=number inputmode=numeric value="${old?old.amount:''}" placeholder="예: 85000"></label>
-  <div class=card style="margin:0"><div class="row between"><b>이번 지출 금액</b><b class=big id=expTotal>${money(old?old.amount:0)}</b></div></div>
+  <div><b>지출 항목</b><div class=muted>체크박스로 선택하세요. 여러 항목도 가능합니다.</div><div class=check-grid style="margin-top:8px">${cats.map(c=>`<label class=check-item><input type=checkbox class=expCat value="${c}" ${(old&&(old.category||'').split(' + ').includes(c))?'checked':''}>${c}</label>`).join('')}</div><input id=expOther placeholder="기타 항목 직접 입력" style="margin-top:8px"></div>
+  <div class=card style="margin:0">
+    <b>🧾 영수증 사진</b>
+    <div class=muted style="margin:5px 0 9px">여러 장을 한 번에 선택할 수 있습니다. 한 장만 선택되는 기기에서는 다시 눌러 추가하면 기존 사진에 계속 누적됩니다. 사진을 올리면 금액을 자동 인식해 합산합니다.</div>
+    <input id=expReceipts type=file accept="image/*" multiple style="padding:9px;background:#fff">
+    <div id=expReceiptStatus class=muted style="margin-top:7px">선택된 영수증 ${existing.length}장</div>
+    <div id=expReceiptInputs style="display:grid;gap:8px;margin-top:10px"></div>
+  </div>
+  <label>영수증 외 추가 금액<input id=expExtra type=number inputmode=numeric value="${existing.length?0:(old?.amount||'')}" placeholder="영수증 없는 비용이 있으면 입력"></label>
+  <div class=card style="margin:0"><div class="row between"><b>이번 지출 합계</b><b class=big id=expTotal>${money(old?old.amount:0)}</b></div><div class=muted style="margin-top:5px">영수증 자동 인식 금액 + 직접 수정한 금액 + 추가 금액</div></div>
   <label>사용 내용 / 메모<input id=expMemo value="${old?escapeHtml(old.memo||''):''}" placeholder="선택사항"></label>
-  <label class="pill ghost" style="text-align:center;cursor:pointer">🧾 영수증 파일 첨부<input id=expFile type=file accept="image/*,.pdf" style="display:none"></label>
-  <div id=expFileName class=muted>${old&&old.image?'기존 영수증이 첨부되어 있습니다.':''}</div>
-  <button class=btn id=saveExpense style="width:100%">${old?'수정 저장':'지출 저장'}</button></div></div>`;
+  <button class=btn id=saveExpense style="width:100%">${old?'수정 저장':'지출 저장'}</button><div id=expSaveState class=muted style="text-align:center"></div></div></div>`;
   document.body.appendChild(wrap);
-  const amount=wrap.querySelector('#expAmount');amount.oninput=()=>wrap.querySelector('#expTotal').textContent=money(amount.value);
-  wrap.querySelector('#closeExpense').onclick=()=>wrap.remove();
-  wrap.querySelector('#expFile').onchange=e=>{wrap.querySelector('#expFileName').textContent=e.target.files[0]?.name||''};
-  wrap.querySelector('#saveExpense').onclick=()=>{
+
+  let receiptState=existing;
+  const picker=wrap.querySelector('#expReceipts'), list=wrap.querySelector('#expReceiptInputs'), extra=wrap.querySelector('#expExtra'), totalEl=wrap.querySelector('#expTotal'), state=wrap.querySelector('#expSaveState'), saveBtn=wrap.querySelector('#saveExpense');
+  let busy=0;
+  function calcTotal(){const v=receiptState.reduce((a,r)=>a+Number(r.amount||0),0)+Number(extra.value||0);totalEl.textContent=money(v);return v}
+  function updateBusy(delta){busy=Math.max(0,busy+delta);saveBtn.disabled=busy>0;saveBtn.textContent=busy>0?'영수증 처리 중...':(old?'수정 저장':'지출 저장')}
+  function drawReceipts(){
+    wrap.querySelector('#expReceiptStatus').textContent=`선택된 영수증 ${receiptState.length}장`;
+    list.innerHTML=receiptState.length?receiptState.map((r,i)=>`<div class=receipt-card style="display:grid;grid-template-columns:64px 1fr 104px 40px;gap:7px;align-items:center">
+      ${String(r.data||'').startsWith('data:image/')?`<img src="${r.data}" style="width:64px;height:64px;object-fit:cover;border-radius:7px" alt="영수증 ${i+1}">`:'<div>🧾</div>'}
+      <div style="min-width:0"><b style="font-size:12px;word-break:break-all">${escapeHtml(r.name||('영수증 '+(i+1)))}</b><div class=muted style="font-size:11px;margin-top:3px">${r.ocrStatus==='reading'?`금액 자동 인식 중 ${r.ocrProgress||0}%`:r.ocrStatus==='done'?(Number(r.amount||0)>0?'금액 자동 입력 완료':'자동 인식 실패 · 금액 직접 입력'):r.ocrStatus==='error'?'자동 인식 실패 · 금액 직접 입력':r.ocrStatus==='manual'?'직접 입력':''}</div></div>
+      <input class=expRAmt data-i="${i}" type=number inputmode=numeric placeholder="금액" value="${Number(r.amount||0)||''}" style="padding:8px">
+      <button type=button class="pill danger expRDel" data-i="${i}" style="padding:8px">×</button>
+    </div>`).join(''):'<div class=muted>아직 첨부된 영수증이 없습니다.</div>';
+    list.querySelectorAll('.expRAmt').forEach(inp=>inp.oninput=()=>{const i=Number(inp.dataset.i);if(receiptState[i]){receiptState[i].amount=Number(inp.value||0);receiptState[i].ocrStatus='manual';calcTotal()}});
+    list.querySelectorAll('.expRDel').forEach(b=>b.onclick=()=>{receiptState.splice(Number(b.dataset.i),1);drawReceipts();calcTotal()});
+    calcTotal();
+  }
+  drawReceipts();extra.oninput=calcTotal;wrap.querySelector('#closeExpense').onclick=()=>wrap.remove();
+
+  picker.addEventListener('change',async()=>{
+    const files=[...(picker.files||[])];if(!files.length)return;
+    updateBusy(1);state.textContent=`영수증 ${files.length}장 불러오는 중...`;
+    try{
+      const prepared=[];await readReceipts(files,x=>prepared.push(...x));
+      const start=receiptState.length;prepared.forEach(x=>receiptState.push({...x,amount:0,ocrStatus:'reading',ocrProgress:0}));drawReceipts();picker.value='';
+      state.textContent=`${prepared.length}장 추가 완료 · 금액 자동 인식 중...`;
+      for(let j=0;j<prepared.length;j++){
+        const idx=start+j;
+        try{const amt=await autoReadReceiptAmount(receiptState[idx],p=>{if(receiptState[idx]){receiptState[idx].ocrProgress=p;drawReceipts()}});if(receiptState[idx]){receiptState[idx].amount=amt||0;receiptState[idx].ocrStatus='done';receiptState[idx].ocrProgress=100;drawReceipts()}}
+        catch(e){if(receiptState[idx]){receiptState[idx].ocrStatus='error';receiptState[idx].ocrError=(e&&e.message)||'OCR 실패';drawReceipts()}}
+      }
+      const ok=receiptState.slice(start).filter(r=>Number(r.amount||0)>0).length;
+      state.textContent=`✅ 영수증 ${prepared.length}장 추가 · ${ok}장 금액 자동 입력${ok<prepared.length?' · 나머지는 금액칸에 직접 입력 가능':''}`;
+    }catch(e){console.error(e);state.textContent='영수증을 불러오지 못했습니다. 다른 사진으로 다시 선택해주세요.'}
+    finally{updateBusy(-1);calcTotal()}
+  });
+
+  saveBtn.onclick=()=>{
+    if(busy)return;
     let cats=[...wrap.querySelectorAll('.expCat:checked')].map(x=>x.value);if(!cats.length)return alert('지출 항목을 하나 이상 체크해주세요.');
     if(cats.includes('기타')){let o=(wrap.querySelector('#expOther').value||'').trim();cats=cats.filter(x=>x!=='기타');cats.push(o||'기타')}
-    let a=Number(amount.value||0);if(a<=0)return alert('금액을 입력해주세요.');let memo=wrap.querySelector('#expMemo').value.trim();let f=wrap.querySelector('#expFile').files[0];
-    const finish=image=>{if(old){let id=old.id||('e'+Date.now());db.trainings[d].expenses[index]={...old,id,category:cats.join(' + '),amount:a,memo,image:image||old.image||''};let l=db.ledger.find(x=>x.id===id);if(l)Object.assign(l,{date:d,type:'out',category:cats.join(' + '),amount:a,memo,source:'training'});else db.ledger.push({id,date:d,type:'out',category:cats.join(' + '),amount:a,memo,source:'training'});}else{commitExpense(d,cats.join(' + '),a,memo,image||'')}save();wrap.remove();render()};
-    if(f){let r=new FileReader();r.onload=()=>finish(r.result);r.readAsDataURL(f)}else finish(old?.image||'');
+    const a=calcTotal();if(a<=0)return alert('영수증 금액 또는 추가 금액을 입력해주세요.');
+    const memo=wrap.querySelector('#expMemo').value.trim(), category=cats.join(' + '), firstReceipt=receiptState[0]?.data||old?.image||'';
+    saveBtn.disabled=true;saveBtn.textContent='저장 중...';state.textContent='저장하고 있습니다.';
+    let prevExpense=index===null?null:{...old}, prevLedger=null, isNew=index===null;
+    if(old){
+      let id=old.id||('e'+Date.now());
+      db.trainings[d].expenses[index]={...old,id,category,amount:a,memo,image:firstReceipt,receipts:receiptState};
+      let li=db.ledger.findIndex(x=>x.id===id);
+      if(li>=0){prevLedger={index:li,item:{...db.ledger[li]}};Object.assign(db.ledger[li],{date:d,type:'out',category,amount:a,memo,source:'training',receipts:receiptState,receipt:firstReceipt})}
+      else db.ledger.push({id,date:d,type:'out',category,amount:a,memo,source:'training',receipts:receiptState,receipt:firstReceipt});
+    }else{
+      let id='e'+Date.now();db.trainings[d].expenses.push({id,category,amount:a,memo,image:firstReceipt,receipts:receiptState});db.ledger.push({id,date:d,type:'out',category,amount:a,memo,source:'training',receipts:receiptState,receipt:firstReceipt});
+    }
+    if(!save()){
+      if(isNew){db.trainings[d].expenses.pop();db.ledger.pop()}else{db.trainings[d].expenses[index]=prevExpense;if(prevLedger)db.ledger[prevLedger.index]=prevLedger.item}
+      saveBtn.disabled=false;saveBtn.textContent=old?'수정 저장':'지출 저장';state.textContent='❌ 저장 실패';return;
+    }
+    state.textContent='✅ 저장 완료';setTimeout(()=>{wrap.remove();render();showToast(`✅ 지출 저장 완료 · ${money(a)}`)},250);
   }
 }
 function commitExpense(d,cat,amount,memo,image){let id='e'+Date.now();db.trainings[d].expenses.push({id,category:cat,amount,memo,image});db.ledger.push({id,date:d,type:'out',category:cat,amount,memo,source:'training'})}
